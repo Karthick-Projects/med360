@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import SERVER_URL from "../../config"; // Your FastAPI backend URL
+import SERVER_URL from "../../config";
+import { useNavigation } from "@react-navigation/native";
 
 // --- THEME COLORS ---
 const PRIMARY_TEAL = "#00A896";
@@ -34,7 +35,7 @@ type Doctor = {
 
 type TimeSlot = {
   id: string;
-  time: string;
+  time: string; // Expected format: "09:00 AM" or "14:00"
   available: boolean;
 };
 
@@ -57,10 +58,22 @@ const getRelativeDayLabel = (date: Date) => {
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-
   if (date.toDateString() === today.toDateString()) return "Today";
   if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
   return getDayLabel(date);
+};
+
+/**
+ * Converts time string (e.g., "09:30 AM" or "14:00") to minutes from midnight
+ */
+const timeToMinutes = (timeStr: string): number => {
+  const [time, modifier] = timeStr.split(" ");
+  let [hours, minutes] = time.split(":").map(Number);
+
+  if (modifier === "PM" && hours < 12) hours += 12;
+  if (modifier === "AM" && hours === 12) hours = 0;
+
+  return hours * 60 + minutes;
 };
 
 // --- Components ---
@@ -93,7 +106,6 @@ const LegendItem: React.FC<{ colorStyle: object; text: string }> = ({ colorStyle
   </View>
 );
 
-// Horizontal Date Scroller
 const DateScroller: React.FC<{
   selectedDate: number | null;
   selectedMonth: number;
@@ -118,7 +130,7 @@ const DateScroller: React.FC<{
         const isSelected = selectedDate === day && selectedMonth === month;
         return (
           <TouchableOpacity
-            key={date.toISOString()} // ✅ unique key
+            key={date.toISOString()}
             style={[styles.scrollerDayButton, isSelected && styles.scrollerDayButtonSelected]}
             onPress={() => onDateSelect(day, month)}
           >
@@ -133,7 +145,6 @@ const DateScroller: React.FC<{
   );
 };
 
-// Full Month Calendar
 const MonthCalendar: React.FC<{
   selectedDate: number | null;
   selectedMonth: number;
@@ -143,20 +154,7 @@ const MonthCalendar: React.FC<{
   const daysOfWeek = ["S", "M", "T", "W", "T", "F", "S"];
   const currentDate = new Date();
   const calendarYear = currentDate.getFullYear();
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   const renderCalendar = (month: number) => (
     <View style={styles.calendarColumn}>
@@ -164,19 +162,13 @@ const MonthCalendar: React.FC<{
         <TouchableOpacity onPress={() => onMonthChange((month - 1 + 12) % 12)}>
           <Ionicons name="chevron-back" size={20} color={PRIMARY_TEAL} />
         </TouchableOpacity>
-        <Text style={styles.calendarMonthTitle}>
-          {monthNames[month]} {calendarYear}
-        </Text>
+        <Text style={styles.calendarMonthTitle}>{monthNames[month]} {calendarYear}</Text>
         <TouchableOpacity onPress={() => onMonthChange((month + 1) % 12)}>
           <Ionicons name="chevron-forward" size={20} color={PRIMARY_TEAL} />
         </TouchableOpacity>
       </View>
       <View style={styles.weekRow}>
-        {daysOfWeek.map((day, idx) => (
-          <Text key={idx} style={styles.dayOfWeekText}>
-            {day}
-          </Text>
-        ))}
+        {daysOfWeek.map((day, idx) => <Text key={idx} style={styles.dayOfWeekText}>{day}</Text>)}
       </View>
       <View style={styles.calendarGrid}>
         {getCalendarDays(month, calendarYear).map((day, idx) => {
@@ -184,19 +176,12 @@ const MonthCalendar: React.FC<{
           const isPast = day !== null && new Date(calendarYear, month, day).getTime() < new Date().setHours(0, 0, 0, 0);
           return (
             <TouchableOpacity
-              key={`${month}-${day ?? "empty"}-${idx}`} // ✅ unique key
-              style={[
-                styles.dateCell,
-                day === null && styles.dateCellEmpty,
-                isSelected && styles.dateCellSelected,
-                isPast && styles.dateCellDisabled,
-              ]}
+              key={`${month}-${day ?? "empty"}-${idx}`}
+              style={[styles.dateCell, day === null && styles.dateCellEmpty, isSelected && styles.dateCellSelected, isPast && styles.dateCellDisabled]}
               onPress={() => day && onDateSelect(day, month)}
               disabled={isPast || day === null}
             >
-              <Text style={[styles.dateText, isSelected && styles.dateTextSelected, isPast && styles.dateTextDisabled]}>
-                {day}
-              </Text>
+              <Text style={[styles.dateText, isSelected && styles.dateTextSelected, isPast && styles.dateTextDisabled]}>{day}</Text>
             </TouchableOpacity>
           );
         })}
@@ -207,25 +192,22 @@ const MonthCalendar: React.FC<{
   return (
     <View style={styles.calendarWrapper}>
       {renderCalendar(selectedMonth)}
-      <View style={styles.legendContainer}>
-        <LegendItem colorStyle={{ backgroundColor: PRIMARY_TEAL + "10", borderColor: PRIMARY_TEAL }} text="Available" />
-        <LegendItem colorStyle={{ backgroundColor: PRIMARY_TEAL }} text="Selected" />
-        <LegendItem colorStyle={{ backgroundColor: COMPLEMENT_YELLOW + "10", borderColor: COMPLEMENT_YELLOW }} text="Today" />
-        <LegendItem colorStyle={{ backgroundColor: LIGHT_BACKGROUND, borderColor: BORDER_LIGHT }} text="Past/Booked" />
-      </View>
     </View>
   );
 };
 
 // --- Main Screen ---
 const BookNewAppointmentScreen: React.FC = () => {
+  const navigation = useNavigation();
+
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState("All");
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const today = new Date();
-  const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
-  const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth());
+  
+  const now = new Date();
+  const [selectedDay, setSelectedDay] = useState<number | null>(now.getDate());
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [reason, setReason] = useState("");
   const [showFullCalendar, setShowFullCalendar] = useState(false);
@@ -236,7 +218,6 @@ const BookNewAppointmentScreen: React.FC = () => {
     ? doctors
     : doctors.filter((d) => d.specialty === selectedSpecialty);
 
-  // Fetch patient ID
   useEffect(() => {
     AsyncStorage.getItem("PATIENT_ID").then((id) => setPatientId(id));
   }, []);
@@ -246,37 +227,26 @@ const BookNewAppointmentScreen: React.FC = () => {
     const fetchDoctors = async () => {
       try {
         const response = await fetch(`${SERVER_URL}/doctors/`);
-        console.log("HTTP status:", response.status);
-
         const data = await response.json();
-        console.log("Raw data:", data);
+        if (!response.ok) return;
 
-        if (!response.ok) {
-          Alert.alert("Failed to fetch doctors", data.detail || "Something went wrong");
-          return;
-        }
-
-        const doctors: Doctor[] = data.map((doc: any) => ({
+        const mapped: Doctor[] = data.map((doc: any) => ({
           id: doc.id || "N/A",
-          name: (doc.name && doc.name !== "None" ? doc.name : "Unknown").trim(),
-          specialty: (doc.specialty && doc.specialty !== "None" ? doc.specialty : "General").trim(),
-          contact: (doc.contact && doc.contact !== "None" ? doc.contact : "N/A").trim(),
-          status: (doc.status && doc.status !== "None" ? doc.status : "Inactive").trim(),
+          name: (doc.name || "Unknown").trim(),
+          specialty: (doc.specialty || "General").trim(),
+          contact: (doc.contact || "N/A").trim(),
+          status: (doc.status || "Inactive").trim(),
           timeSlots: doc.timeSlots || [],
         }));
-
-        console.log("Mapped doctors:", doctors);
-        setDoctors(doctors);
+        setDoctors(mapped);
       } catch (err) {
-        console.error("Fetch error:", err);
-        Alert.alert("Error", "Cannot connect to server");
+        console.error(err);
       }
     };
-
     fetchDoctors();
   }, []);
 
-  // Fetch time slots
+  // Fetch and Filter Time Slots
   useEffect(() => {
     const fetchTimeSlots = async () => {
       if (!selectedDoctor || !selectedDay) {
@@ -286,20 +256,26 @@ const BookNewAppointmentScreen: React.FC = () => {
 
       try {
         setLoadingSlots(true);
-        const dateStr = new Date(today.getFullYear(), selectedMonth, selectedDay)
-          .toISOString()
-          .split("T")[0];
+        const dateObj = new Date(now.getFullYear(), selectedMonth, selectedDay);
+        const dateStr = dateObj.toISOString().split("T")[0];
 
-        const response = await fetch(
-          `${SERVER_URL}/appointments/timeslots?doctor_id=${selectedDoctor.id}&date=${dateStr}`
-        );
+        const response = await fetch(`${SERVER_URL}/appointments/timeslots?doctor_id=${selectedDoctor.id}&date=${dateStr}`);
+        if (!response.ok) throw new Error("Failed");
 
-        if (!response.ok) throw new Error("Failed to fetch time slots");
+        const data: TimeSlot[] = await response.json();
 
-        const data = await response.json();
-        setTimeSlots(data);
+        // --- FILTER LOGIC ---
+        const isToday = dateObj.toDateString() === now.toDateString();
+        
+        if (isToday) {
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          // Only show slots that are at least 15 minutes in the future
+          const filtered = data.filter(slot => timeToMinutes(slot.time) > currentMinutes + 15);
+          setTimeSlots(filtered);
+        } else {
+          setTimeSlots(data);
+        }
       } catch (error) {
-        console.error(error);
         setTimeSlots([]);
       } finally {
         setLoadingSlots(false);
@@ -309,115 +285,106 @@ const BookNewAppointmentScreen: React.FC = () => {
     fetchTimeSlots();
   }, [selectedDoctor, selectedDay, selectedMonth]);
 
-  const handleBooking = () => {
-    if (!selectedDoctor || !selectedSlot || !selectedDay || !reason.trim() || !patientId) {
-      Alert.alert("Missing Details", "Please select all fields");
-      return;
-    }
+const handleBooking = () => {
+  if (!selectedDoctor || !selectedSlot || !selectedDay || !reason.trim() || !patientId) {
+    Alert.alert("Missing Details", "Please select all fields");
+    return;
+  }
 
-    const appointmentData = {
-      patient_id: patientId,
-      doctor_id: selectedDoctor.id,
-      date: new Date(today.getFullYear(), selectedMonth, selectedDay).toISOString().split("T")[0],
-      time: selectedSlot.time,
-      reason: reason.trim(),
-    };
-
-    fetch(`${SERVER_URL}/appointments/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(appointmentData),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (res.ok) {
-          Alert.alert("Success", "Appointment booked successfully");
-          setSelectedSlot(null);
-          setReason("");
-        } else {
-          Alert.alert("Error", data.detail || "Failed to book appointment");
-        }
-      })
-      .catch(() => Alert.alert("Error", "Failed to book appointment"));
+  const appointmentData = {
+    patient_id: patientId,
+    doctor_id: selectedDoctor.id,
+    date: new Date(now.getFullYear(), selectedMonth, selectedDay)
+      .toISOString()
+      .split("T")[0],
+    time: selectedSlot.time,
+    reason: reason.trim(),
   };
+
+  fetch(`${SERVER_URL}/appointments/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(appointmentData),
+  })
+    .then(async (res) => {
+      if (res.ok) {
+        Alert.alert(
+          "Success",
+          "Appointment booked successfully",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setSelectedSlot(null);
+                setReason("");
+                navigation.goBack(); // ✅ AUTO BACK
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        const data = await res.json();
+        Alert.alert("Error", data.detail || "Failed to book");
+      }
+    })
+    .catch(() => Alert.alert("Error", "Server error"));
+};
 
   return (
     <View style={styles.screenContainer}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Book New Appointment</Text>
-        <Text style={styles.headerSubtitle}>Find your doctor and secure your slot.</Text>
+        <Text style={styles.headerTitle}>Book Appointment</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* 1. Specialty Selection */}
+        {/* 1. Specialty */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>1. Choose Specialist</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.specialtyScroll}>
+          <Text style={styles.sectionTitle}>1. Choose Specialty</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {specialties.map((spec) => (
               <TouchableOpacity
                 key={spec}
                 style={[styles.specialtyButton, selectedSpecialty === spec && styles.specialtyButtonSelected]}
-                onPress={() => {
-                  setSelectedSpecialty(spec);
-                  setSelectedDoctor(null);
-                  setSelectedSlot(null);
-                }}
+                onPress={() => { setSelectedSpecialty(spec); setSelectedDoctor(null); setSelectedSlot(null); }}
               >
-                <Text style={[styles.specialtyText, selectedSpecialty === spec && styles.specialtyTextSelected]}>
-                  {spec}
-                </Text>
+                <Text style={[styles.specialtyText, selectedSpecialty === spec && styles.specialtyTextSelected]}>{spec}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
-        {/* 2. Doctor List */}
+        {/* 2. Doctor */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>2. Select Doctor ({availableDoctors.length})</Text>
-          <FlatList
-            data={availableDoctors}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <DoctorListItem
-                doctor={item}
-                selected={selectedDoctor?.id === item.id}
-                onSelect={() => {
-                  setSelectedDoctor(item);
-                  setSelectedSlot(null);
-                }}
-              />
-            )}
-            scrollEnabled={false}
-            ListEmptyComponent={<Text style={styles.noDoctorsText}>No doctors available.</Text>}
+          <Text style={styles.sectionTitle}>2. Select Doctor</Text>
+          {availableDoctors.map(item => (
+            <DoctorListItem
+              key={item.id}
+              doctor={item}
+              selected={selectedDoctor?.id === item.id}
+              onSelect={() => { setSelectedDoctor(item); setSelectedSlot(null); }}
+            />
+          ))}
+        </View>
+
+        {/* 3. Date */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>3. Select Date</Text>
+          <DateScroller 
+             selectedDate={selectedDay} 
+             selectedMonth={selectedMonth} 
+             onDateSelect={(d, m) => { setSelectedDay(d); setSelectedMonth(m); setSelectedSlot(null); }} 
           />
         </View>
 
-        {/* 3. Date Scroller */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>3. Select Date</Text>
-          <DateScroller selectedDate={selectedDay} selectedMonth={selectedMonth} onDateSelect={(d, m) => { setSelectedDay(d); setSelectedMonth(m); setSelectedSlot(null); }} />
-          <TouchableOpacity style={styles.calendarToggle} onPress={() => setShowFullCalendar(!showFullCalendar)}>
-            <Text style={styles.calendarToggleText}>{showFullCalendar ? "Hide Full Calendar" : "View Full Calendar"}</Text>
-            <Ionicons name={showFullCalendar ? "chevron-up" : "chevron-down"} size={16} color={PRIMARY_TEAL} />
-          </TouchableOpacity>
-          {showFullCalendar && (
-            <MonthCalendar
-              selectedDate={selectedDay}
-              selectedMonth={selectedMonth}
-              onDateSelect={(d, m) => { setSelectedDay(d); setSelectedMonth(m); setSelectedSlot(null); }}
-              onMonthChange={(m) => { setSelectedMonth(m); setSelectedDay(null); setSelectedSlot(null); }}
-            />
-          )}
-        </View>
-
         {/* 4. Time Slots */}
-        {selectedDay !== null && selectedDoctor && (
+        {selectedDoctor && selectedDay !== null && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>4. Select Time Slot</Text>
+            <Text style={styles.sectionTitle}>4. Available Time Slots</Text>
             {loadingSlots ? (
-              <Text style={{ textAlign: "center", marginVertical: 10 }}>Loading slots...</Text>
+              <Text style={styles.infoText}>Checking availability...</Text>
             ) : timeSlots.length === 0 ? (
-              <Text style={{ textAlign: "center", marginVertical: 10 }}>No available slots for this date</Text>
+              <Text style={styles.infoText}>No remaining slots for today.</Text>
             ) : (
               <View style={styles.timeSlotGrid}>
                 {timeSlots.map((slot) => (
@@ -431,12 +398,7 @@ const BookNewAppointmentScreen: React.FC = () => {
                     onPress={() => slot.available && setSelectedSlot(slot)}
                     disabled={!slot.available}
                   >
-                    <Text
-                      style={[
-                        styles.timeSlotText,
-                        (selectedSlot?.id === slot.id || !slot.available) && styles.timeSlotTextSelectedOrDisabled,
-                      ]}
-                    >
+                    <Text style={[styles.timeSlotText, (selectedSlot?.id === slot.id || !slot.available) && styles.timeSlotTextSelectedOrDisabled]}>
                       {slot.time}
                     </Text>
                   </TouchableOpacity>
@@ -447,36 +409,30 @@ const BookNewAppointmentScreen: React.FC = () => {
         )}
 
         {/* 5. Reason */}
-        {selectedDay !== null && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>5. Reason for Appointment</Text>
-            <TextInput
+        <View style={styles.section}>
+           <Text style={styles.sectionTitle}>5. Reason</Text>
+           <TextInput
               style={styles.reasonInput}
-              placeholder="Reason for your visit"
+              placeholder="Briefly describe your symptoms"
               multiline
               value={reason}
               onChangeText={setReason}
             />
-          </View>
-        )}
+        </View>
 
-        {/* 6. Confirm Button */}
         <TouchableOpacity
-          style={[styles.submitButton, (!selectedDoctor || !selectedSlot || !selectedDay || !reason.trim()) && styles.submitButtonDisabled]}
+          style={[styles.submitButton, (!selectedSlot || !reason.trim()) && styles.submitButtonDisabled]}
           onPress={handleBooking}
-          disabled={!selectedDoctor || !selectedSlot || !selectedDay || !reason.trim()}
+          disabled={!selectedSlot || !reason.trim()}
         >
-          <Text style={styles.submitButtonText}>Confirm Appointment</Text>
-          <Ionicons name="send" size={24} color={NEUTRAL_LIGHT} style={{ marginLeft: 10 }} />
+          <Text style={styles.submitButtonText}>Confirm Booking</Text>
         </TouchableOpacity>
-        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
 };
 
 export default BookNewAppointmentScreen;
-
 // --- Stylesheet (Updated) ---
 
 const styles = StyleSheet.create({
@@ -860,4 +816,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
+  infoText: { textAlign: "center", color: "#64748B", marginVertical: 10 }
 });

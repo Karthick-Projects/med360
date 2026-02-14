@@ -131,13 +131,8 @@ class PatientProfile(BaseModel):
     role: str
     name: str
     dob: str
-    age: int
-    gender: str
     mobile: str
-    address: str
-    disease: str
-    assignedDoctor: str
-    status: str
+
 
 class Medication(BaseModel):
     name: str
@@ -166,3 +161,13 @@ class PrescriptionOut(BaseModel):
     status: str
     dateIssued: str
     medications: list[Medication]
+
+
+class VitalsCreate(BaseModel):
+    patient_id: str
+    heart_rate: Optional[int] = None
+    blood_pressure: Optional[str] = None
+    temperature: Optional[float] = None
+    spo2: Optional[int] = None
+    respiration_rate: Optional[int] = None
+    blood_sugar: Optional[int] = None

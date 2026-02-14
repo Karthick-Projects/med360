@@ -24,14 +24,14 @@ def register_user(data: RegisterRequest):
         raise HTTPException(status_code=400, detail="Phone already registered")
 
     # Generate patient ID
-    user_id = f"PID-{ObjectId()}"
+    user_id = generate_patient_id()
 
     # Save in DB
     result = users_collection.insert_one({
         "user_id": user_id,
         "name": data.name,
         "dob": data.dob,
-        "phone": data.phone,
+        "mobile": data.phone,
         "password": data.password,  # 🔒 Ideally hash this!
         "role": "patient"
     })
@@ -46,13 +46,13 @@ def login_user(data: LoginModel):
     # 1️⃣ Try users collection first
     user = users_collection.find_one({"user_id": data.phone})
     if not user:
-        user = users_collection.find_one({"phone": data.phone})
+        user = users_collection.find_one({"mobile": data.phone})
 
     # 2️⃣ If not found, try doctors collection
     if not user:
         user = doctors_collection.find_one({"doctorId": data.phone})
         if not user:
-            user = doctors_collection.find_one({"phone": data.phone})
+            user = doctors_collection.find_one({"contact": data.phone})
         if user:
             role = "doctor"
 

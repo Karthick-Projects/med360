@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from models import *
-from database import users_collection, doctors_collection, admin_collection,admission_collection,staff_collection,pharmacy_collection,lab_report_collection
+from database import users_collection, doctors_collection, admin_collection,admission_collection,staff_collection,pharmacy_collection,lab_report_collection,vitals_collection
 from datetime import datetime
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -256,3 +256,42 @@ def add_lab_report(report: LabReportCreate):
     lab_report_collection.insert_one(report_doc)
 
     return {"reportId": report_id, "message": "Lab report saved successfully"}
+
+
+@router.post("/vitals/update")
+def update_patient_vitals(vitals: VitalsCreate):
+    try:
+        print("Id:",vitals.patient_id)
+        # 🔍 Verify patient exists
+        patient = users_collection.find_one({
+            "$or": [
+                {"user_id": vitals.patient_id},
+                {"mobile": vitals.patient_id}
+            ]
+        })
+        print(patient)
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+
+        vitals_doc = {
+            "patient_id": vitals.patient_id,
+            "heart_rate": vitals.heart_rate,
+            "blood_pressure": vitals.blood_pressure,
+            "temperature": vitals.temperature,
+            "spo2": vitals.spo2,
+            "respiration_rate": vitals.respiration_rate,
+            "blood_sugar": vitals.blood_sugar,
+            "created_at": datetime.utcnow(),
+        }
+
+        vitals_collection.insert_one(vitals_doc)
+
+        return {
+            "message": "Vitals updated successfully",
+            "patient_id": vitals.patient_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to update vitals")

@@ -101,6 +101,13 @@ const AdminDashboardScreen = () => {
           <Text style={styles.cardTitle}>🧪 Lab Management</Text>
           <Text style={styles.cardDesc}>Lab tests & reports</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => navigation.navigate("UpdateVitalScreen")}
+        >
+          <Text style={styles.cardTitle}>Vital Screen</Text>
+          <Text style={styles.cardDesc}>Vital Screen</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

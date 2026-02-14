@@ -32,6 +32,7 @@ import DoctorExperienceScreen from "./screens/Admin/DoctorExperienceScreen";
 import StaffManagementScreen from "./screens/Admin/StaffManagementScreen";
 import PharmacyInventoryScreen from "./screens/Admin/PharmacyInventoryScreen";
 import LabManagementScreen from "./screens/Admin/LabManagementScreen";
+import AdminUpdateVitalsScreen from './screens/Admin/UpdateVitalsScreen';
 import UserMasterRegistrationScreen from './screens/Admin/UserMasterRegistrationScreen';
 const Stack = createNativeStackNavigator();
 
@@ -192,6 +193,12 @@ const App = () => {
           name="LabManagement"
           component={LabManagementScreen}
           options={{ title: "Lab Management" }}
+        />
+        
+        <Stack.Screen
+          name="UpdateVitalScreen"
+          component={AdminUpdateVitalsScreen}
+          options={{ title: "Vital Update" }}
         />
 
 
