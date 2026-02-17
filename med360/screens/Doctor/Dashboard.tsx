@@ -256,7 +256,7 @@ const DoctorDashboard = ({ navigation, route }: any) => {
             color="#6A5ACD"
             shadowColor="#4b3e94"
             icon={<FontAwesome5 name="file-medical" size={24} color="#fff" />}
-            onPress={() => navigation.navigate("PatientMedicalHistory")}
+            onPress={() => navigation.navigate("DoctorPatientLookupScreen")}
           />
 
           <DashboardCard
@@ -264,7 +264,7 @@ const DoctorDashboard = ({ navigation, route }: any) => {
             color="#FF8C00"
             shadowColor="#cc7000"
             icon={<FontAwesome5 name="flask" size={24} color="#fff" />}
-            onPress={() => navigation.navigate("PatientLabResults")}
+            onPress={() => navigation.navigate("DoctorLabLookupScreen")}
           />
 
           <DashboardCard
@@ -286,7 +286,7 @@ const DoctorDashboard = ({ navigation, route }: any) => {
             color="#2A9D8F"
             shadowColor="#1f7a6a"
             icon={<MaterialIcons name="monitor-heart" size={26} color="#fff" />}
-            onPress={() => navigation.navigate("VitalsScreen")}
+            onPress={() => navigation.navigate("DoctorVitalsLookup")}
           />
         </View>
 

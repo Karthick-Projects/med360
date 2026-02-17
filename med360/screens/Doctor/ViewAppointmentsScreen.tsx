@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,14 +7,18 @@ import {
   RefreshControl,
   TouchableOpacity,
   Linking,
+  ActivityIndicator,
+  Alert,
+  StatusBar,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import SERVER_URL from "../../config";
 
-// --- Type Definitions ---
+/* ================= TYPES ================= */
 
 type Appointment = {
   id: string;
-  patientName: string;
   patientId: string;
   phone: string;
   reason: string;
@@ -23,64 +27,12 @@ type Appointment = {
   status: "Pending" | "Completed";
 };
 
-type TabProps = {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-};
+/* ================= TAB BUTTON ================= */
 
-// --- Data Placeholders ---
-
-const INITIAL_APPOINTMENTS: Appointment[] = [
-  {
-    id: "1",
-    patientName: "Ramesh Kumar",
-    patientId: "PID1023",
-    phone: "9876543210", // Mobile number is here
-    reason: "Fever and body pain",
-    date: "10 Jan 2026",
-    time: "10:30 AM",
-    status: "Pending",
-  },
-  {
-    id: "2",
-    patientName: "Suresh B",
-    patientId: "PID1045",
-    phone: "9123456780", // Mobile number is here
-    reason: "Chest pain follow-up",
-    date: "10 Jan 2026",
-    time: "11:15 AM",
-    status: "Pending",
-  },
-  {
-    id: "3",
-    patientName: "Lakshmi Devi",
-    patientId: "PID1088",
-    phone: "9012345678", // Mobile number is here
-    reason: "Diabetes checkup",
-    date: "10 Jan 2026",
-    time: "12:00 PM",
-    status: "Completed",
-  },
-  {
-    id: "4",
-    patientName: "Ganesh M",
-    patientId: "PID1101",
-    phone: "9988776655", // Mobile number is here
-    reason: "Migraine consultation",
-    date: "09 Jan 2026",
-    time: "03:00 PM",
-    status: "Completed",
-  },
-];
-
-// --- Reusable Components ---
-
-const TabButton: React.FC<TabProps> = ({ label, active, onPress }) => (
+const TabButton = ({ label, active, onPress }: any) => (
   <TouchableOpacity
     style={[styles.tabButton, active && styles.tabButtonActive]}
     onPress={onPress}
-    activeOpacity={0.8}
   >
     <Text style={[styles.tabText, active && styles.tabTextActive]}>
       {label}
@@ -88,191 +40,143 @@ const TabButton: React.FC<TabProps> = ({ label, active, onPress }) => (
   </TouchableOpacity>
 );
 
-/**
- * @description Detailed Card component for a single appointment.
- */
-const AppointmentCard: React.FC<{
-  item: Appointment;
-  onApprove: (id: string) => void;
-}> = ({ item, onApprove }) => {
-  // Function to initiate a call
-  const handleCall = () => {
-    Linking.openURL(`tel:${item.phone}`);
-  };
+/* ================= CARD ================= */
 
+const AppointmentCard = ({ item, onApprove }: any) => {
   const isPending = item.status === "Pending";
-  const statusColor = isPending ? "#FF8C00" : "#50C878"; // Orange for pending, Green for completed
-  const cardBorderColor = isPending ? '#FF8C00' : '#50C878';
+  const color = isPending ? "#F59E0B" : "#10B981";
 
   return (
-    <View style={[styles.card, { borderLeftColor: cardBorderColor }]}>
-      {/* Top Row: Name, ID, and Status Badge */}
+    <View style={[styles.card, { borderLeftColor: color }]}>
       <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderLeft}>
-          <Text style={styles.patientName}>{item.patientName}</Text>
-          <Text style={styles.patientId}>Patient ID: {item.patientId}</Text>
-        </View>
-
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-          <Text style={[styles.statusText, { color: statusColor }]}>
-            {item.status}
-          </Text>
-        </View>
+        <Text style={styles.patientId}>ID: {item.patientId}</Text>
+        <Text style={[styles.statusText, { color }]}>{item.status}</Text>
       </View>
-      
-      {/* Separator */}
+
       <View style={styles.separator} />
 
-      {/* Details Section */}
-      <View style={styles.detailsContainer}>
-        {/* Date and Time */}
-        <View style={styles.dateTimeContainer}>
-          <View style={styles.detailRow}>
-            <Ionicons name="calendar-outline" size={16} color="#475569" style={styles.iconMargin} />
-            <Text style={styles.detailValue}>{item.date}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="time-outline" size={16} color="#475569" style={styles.iconMargin} />
-            <Text style={styles.detailValue}>{item.time}</Text>
-          </View>
-        </View>
-        
-        {/* === Mobile Number (Made More Prominent) === */}
-        <View style={styles.mobileRow}>
-          <Ionicons name="call-outline" size={18} color="#1E3A8A" style={styles.iconMargin} />
-          <Text style={styles.mobileLabel}>Mobile:</Text>
-          <Text style={styles.mobileValue}>{item.phone}</Text>
-        </View>
-        {/* =========================================== */}
-        
-        {/* Reason */}
-        <View style={styles.detailRow}>
-          <MaterialIcons name="local-hospital" size={16} color="#475569" style={styles.iconMargin} />
-          <Text style={styles.detailLabel}>Reason:</Text>
-          <Text style={styles.detailValueFlex}>{item.reason}</Text>
-        </View>
+      <Text style={styles.info}>📅 {item.date} | ⏰ {item.time}</Text>
+      <Text style={styles.info}>📞 {item.phone}</Text>
+      <Text style={styles.reason}>🩺 {item.reason}</Text>
 
-      </View>
-      
-      {/* Action Buttons */}
-      <View style={styles.actionButtonsContainer}>
-        {/* Call Button (Only for Pending) */}
-        {isPending && (
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.callButton]} 
-            onPress={handleCall} 
-            activeOpacity={0.8}
+      {isPending && (
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.btn, styles.callBtn]}
+            onPress={() => Linking.openURL(`tel:${item.phone}`)}
           >
-            <Ionicons name="call" size={18} color="#fff" />
-            <Text style={styles.buttonText}>Call</Text>
+            <Text style={styles.btnText}>Call</Text>
           </TouchableOpacity>
-        )}
-        
-        {/* Approve Button (Only for Pending) */}
-        {isPending && (
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.approveButton]} 
-            onPress={() => onApprove(item.id)} 
-            activeOpacity={0.8}
+
+          <TouchableOpacity
+            style={[styles.btn, styles.approveBtn]}
+            onPress={() => onApprove(item.id)}
           >
-            <MaterialIcons name="check-circle" size={18} color="#fff" />
-            <Text style={styles.buttonText}>Approve</Text>
+            <Text style={styles.btnText}>Approve</Text>
           </TouchableOpacity>
-        )}
-        
-        {/* View Details Button (For Completed) */}
-        {!isPending && (
-            <TouchableOpacity 
-                style={[styles.actionButton, styles.viewButton]} 
-                onPress={() => console.log(`View record for ${item.id}`)} 
-                activeOpacity={0.8}
-            >
-                <Ionicons name="document-text-outline" size={18} color="#fff" />
-                <Text style={styles.buttonText}>View Record</Text>
-            </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 };
 
+/* ================= MAIN ================= */
 
-// --- Main Screen Component (Unchanged logic) ---
-
-const ViewAppointmentsScreen: React.FC = () => {
-  const [appointments, setAppointments] =
-    useState<Appointment[]>(INITIAL_APPOINTMENTS);
+const ViewAppointmentsScreen = () => {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"Pending" | "Completed">("Pending");
+  const [activeTab, setActiveTab] =
+    useState<"Pending" | "Completed">("Pending");
 
-  const filteredAppointments = appointments.filter(
-    (app) => app.status === activeTab
-  );
+  /* ---------- FETCH ALL TODAY APPOINTMENTS ---------- */
 
-  const handleApprove = useCallback((id: string) => {
-    setAppointments(prevAppointments => 
-      prevAppointments.map(app => 
-        app.id === id ? { ...app, status: 'Completed' } : app
-      )
-    );
-  }, []);
-  
-  const pendingCount = appointments.filter(a => a.status === 'Pending').length;
-  const completedCount = appointments.filter(a => a.status === 'Completed').length;
+  const fetchAppointments = async () => {
+    try {
+      const doctorId = await AsyncStorage.getItem("PATIENT_ID");
+      if (!doctorId) return;
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setAppointments(INITIAL_APPOINTMENTS.map(app => ({...app}))); 
+      const res = await fetch(
+        `${SERVER_URL}/appointments/doctor/${doctorId}/today`
+      );
+      const data = await res.json();
+
+      if (res.ok) {
+        setAppointments(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
       setRefreshing(false);
-    }, 1500);
+    }
   };
 
-  const renderItem = ({ item }: { item: Appointment }) => (
-    <AppointmentCard item={item} onApprove={handleApprove} />
-  );
+  useEffect(() => {
+    fetchAppointments();
+  }, []);
+
+  /* ---------- APPROVE ---------- */
+
+  const handleApprove = useCallback(async (id: string) => {
+    try {
+      setAppointments(prev =>
+        prev.map(a => (a.id === id ? { ...a, status: "Completed" } : a))
+      );
+
+      await fetch(`${SERVER_URL}/appointments/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "Completed" }),
+      });
+    } catch {
+      Alert.alert("Error", "Update failed");
+      fetchAppointments();
+    }
+  }, []);
+
+  const filtered = appointments.filter(a => a.status === activeTab);
+
+  if (loading) {
+    return <ActivityIndicator size="large" style={{ flex: 1 }} />;
+  }
 
   return (
     <View style={styles.container}>
-      {/* Screen Header */}
-      <Text style={styles.title}>Patient Appointments</Text>
-      <Text style={styles.subtitle}>
-        Scheduled patient visit details
-      </Text>
+      <StatusBar barStyle="dark-content" />
+      <Text style={styles.title}>Today’s Visits</Text>
 
-      {/* Tabs Container */}
-      <View style={styles.tabsContainer}>
+      <View style={styles.tabs}>
         <TabButton
-          label={`Pending (${pendingCount})`}
+          label={`Pending (${appointments.filter(a => a.status === "Pending").length})`}
           active={activeTab === "Pending"}
           onPress={() => setActiveTab("Pending")}
         />
         <TabButton
-          label={`Completed (${completedCount})`}
+          label={`Completed (${appointments.filter(a => a.status === "Completed").length})`}
           active={activeTab === "Completed"}
           onPress={() => setActiveTab("Completed")}
         />
       </View>
 
-      {/* Appointment List */}
       <FlatList
-        data={filteredAppointments}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
+        data={filtered}
+        keyExtractor={i => i.id}
+        renderItem={({ item }) => (
+          <AppointmentCard item={item} onApprove={handleApprove} />
+        )}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1E3A8A" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchAppointments();
+            }}
+          />
         }
-        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Ionicons name="checkmark-circle-outline" size={40} color="#A1A1AA" />
-            <Text style={styles.emptyText}>
-              {activeTab === 'Pending' ? 'No pending appointments.' : 'No completed appointments yet.'}
-            </Text>
-          </View>
+          <Text style={styles.empty}>No {activeTab} appointments</Text>
         }
-        showsVerticalScrollIndicator={false}
       />
     </View>
   );
@@ -280,242 +184,36 @@ const ViewAppointmentsScreen: React.FC = () => {
 
 export default ViewAppointmentsScreen;
 
-// --- Stylesheet ---
+/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F4F6F8",
-    paddingHorizontal: 16,
-    paddingTop: 40,
-  },
+  container: { flex: 1, padding: 16, backgroundColor: "#F8FAFC" },
+  title: { fontSize: 26, fontWeight: "800", marginBottom: 20 },
+  tabs: { flexDirection: "row", marginBottom: 15 },
+  tabButton: { flex: 1, padding: 10, alignItems: "center" },
+  tabButtonActive: { backgroundColor: "#E2E8F0", borderRadius: 8 },
+  tabText: { fontWeight: "600" },
+  tabTextActive: { color: "#1E3A8A" },
 
-  title: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#1E3A8A", // Deep Blue
-  },
-
-  subtitle: {
-    fontSize: 14,
-    color: "#64748B",
-    marginBottom: 15,
-  },
-
-  // --- Tabs Styles ---
-
-  tabsContainer: {
-    flexDirection: "row",
-    backgroundColor: '#E2E8F0',
-    borderRadius: 10,
-    marginBottom: 20,
-    overflow: 'hidden',
-    padding: 3,
-  },
-
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 8,
-  },
-
-  tabButtonActive: {
-    backgroundColor: "#FFFFFF", // White background for active tab
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-
-  tabText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#64748B",
-  },
-
-  tabTextActive: {
-    color: "#1E3A8A",
-    fontWeight: "600",
-  },
-
-  // --- Card Styles ---
-
-  listContent: {
-    paddingBottom: 20,
-  },
-  
   card: {
-    backgroundColor: "#FFFFFF",
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 15,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    borderLeftWidth: 6,
+    backgroundColor: "#FFF",
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 12,
+    borderLeftWidth: 5,
   },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between" },
+  patientId: { fontWeight: "700" },
+  statusText: { fontWeight: "700" },
+  separator: { height: 1, backgroundColor: "#E5E7EB", marginVertical: 8 },
+  info: { fontSize: 13, color: "#475569" },
+  reason: { fontWeight: "600", marginTop: 6 },
 
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  actions: { flexDirection: "row", marginTop: 10 },
+  btn: { flex: 1, padding: 10, borderRadius: 8, alignItems: "center" },
+  callBtn: { backgroundColor: "#3B82F6", marginRight: 6 },
+  approveBtn: { backgroundColor: "#10B981" },
+  btnText: { color: "#FFF", fontWeight: "700" },
 
-  cardHeaderLeft: {
-    flexShrink: 1,
-  },
-
-  patientName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 2,
-  },
-
-  patientId: {
-    fontSize: 12,
-    color: "#64748B",
-  },
-
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 15,
-  },
-
-  statusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-
-  separator: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 10,
-  },
-
-  detailsContainer: {
-    marginBottom: 10,
-  },
-  
-  // New Style for Mobile Number visibility
-  mobileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    marginBottom: 10,
-    backgroundColor: '#EBF4FF', // Light blue background for emphasis
-    borderRadius: 8,
-  },
-  
-  mobileLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: "#1E3A8A",
-    marginRight: 10,
-  },
-  
-  mobileValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: "#1E3A8A",
-  },
-  // End New Style
-  
-  dateTimeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-
-  detailRow: {
-    flexDirection: "row",
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-
-  iconMargin: {
-    marginRight: 8,
-  },
-
-  detailLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: "#475569",
-    width: 65,
-  },
-
-  detailValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
-  
-  detailValueFlex: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0F172A",
-    flex: 1,
-  },
-
-  // --- Action Buttons Styles ---
-  
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    marginTop: 10,
-    justifyContent: 'flex-start',
-  },
-  
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    marginRight: 10,
-    elevation: 2,
-  },
-
-  callButton: {
-    backgroundColor: '#4A90E2', // Primary Blue for Call
-  },
-  
-  approveButton: {
-    backgroundColor: '#50C878', // Green for Approve
-  },
-  
-  viewButton: {
-      backgroundColor: '#64748B', // Gray/Blue for View Record
-  },
-
-  buttonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-
-  // --- Empty State Styles ---
-
-  emptyBox: {
-    marginTop: 80,
-    alignItems: "center",
-    padding: 20,
-  },
-
-  emptyText: {
-    color: "#64748B",
-    fontSize: 16,
-    marginTop: 10,
-    fontWeight: '500',
-  },
+  empty: { textAlign: "center", marginTop: 40, color: "#94A3B8" },
 });

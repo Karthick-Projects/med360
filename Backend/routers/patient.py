@@ -51,7 +51,7 @@ def get_patient_profile(patient_id: str):
             "role": patient["role"],
             "name": patient["name"],
             "dob": patient["dob"],
-            "mobile": patient["mobile"],
+            "mobile": patient["mobile"]
         }
 
     except HTTPException:

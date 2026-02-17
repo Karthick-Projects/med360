@@ -210,6 +210,7 @@ const BookNewAppointmentScreen: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [reason, setReason] = useState("");
+  const [mobilenumber, setMobileNumber] = useState("");
   const [showFullCalendar, setShowFullCalendar] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [patientId, setPatientId] = useState<string | null>(null);
@@ -286,7 +287,7 @@ const BookNewAppointmentScreen: React.FC = () => {
   }, [selectedDoctor, selectedDay, selectedMonth]);
 
 const handleBooking = () => {
-  if (!selectedDoctor || !selectedSlot || !selectedDay || !reason.trim() || !patientId) {
+  if (!selectedDoctor || !selectedSlot || !selectedDay || !reason.trim() || !patientId || !mobilenumber) {
     Alert.alert("Missing Details", "Please select all fields");
     return;
   }
@@ -299,6 +300,8 @@ const handleBooking = () => {
       .split("T")[0],
     time: selectedSlot.time,
     reason: reason.trim(),
+    mobilenumber: mobilenumber,
+    status: 'Pending'
   };
 
   fetch(`${SERVER_URL}/appointments/create`, {
@@ -417,6 +420,17 @@ const handleBooking = () => {
               multiline
               value={reason}
               onChangeText={setReason}
+            />
+        </View>
+
+        <View style={styles.section}>
+           <Text style={styles.sectionTitle}>6. Mobile Number</Text>
+           <TextInput
+              style={styles.reasonInput}
+              placeholder="Mobile Number"
+              multiline
+              value={mobilenumber}
+              onChangeText={setMobileNumber}
             />
         </View>
 

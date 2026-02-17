@@ -31,6 +31,8 @@ class CreateAppointmentModel(BaseModel):
     date: str
     time: str
     reason: str
+    mobilenumber: str
+    status: str
 
 class UserMasterCreate(BaseModel):
     userType: str

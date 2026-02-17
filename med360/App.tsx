@@ -15,7 +15,7 @@ import PatientLabReportsScreen from './screens/Patient/PatientLabReportsScreen';
 import PatientPrescriptionScreen from './screens/Patient/PatientPrescriptionScreen';
 // Optional/Placeholder Screens (Ensure these files exist or remove the imports/Stack.Screens)
 import ViewAppointmentsScreen from './screens/Doctor/ViewAppointmentsScreen';
-import ViewVitalsScreen from './screens/Doctor/ViewVitalsScreen';
+import DoctorVitalsLookup from './screens/Doctor/DoctorVitalsLookup';
 import AccessAppointmentsScreen from './screens/Doctor/AccessAppointmentsScreen';
 import VitalsCheckScreen from './screens/Patient/VitalsCheckScreen';
 import ConsultationRecordsScreen from './screens/Doctor/ConsultationRecordsScreen';
@@ -34,6 +34,8 @@ import PharmacyInventoryScreen from "./screens/Admin/PharmacyInventoryScreen";
 import LabManagementScreen from "./screens/Admin/LabManagementScreen";
 import AdminUpdateVitalsScreen from './screens/Admin/UpdateVitalsScreen';
 import UserMasterRegistrationScreen from './screens/Admin/UserMasterRegistrationScreen';
+import DoctorPatientLookupScreen from './screens/Doctor/DoctorPatientLookupScreen';
+import DoctorLabLookupScreen from './screens/Doctor/DoctorLabLookupScreen';
 const Stack = createNativeStackNavigator();
 
 const App = () => {
@@ -107,8 +109,8 @@ const App = () => {
           options={{ title: 'Vitals & Metrics' }}
         />
         <Stack.Screen
-          name="ViewVitalsScreen"
-          component={ViewVitalsScreen}
+          name="DoctorVitalsLookup"
+          component={DoctorVitalsLookup}
           options={{ title: 'Vitals & Metrics' }}
         />
         <Stack.Screen
@@ -199,6 +201,16 @@ const App = () => {
           name="UpdateVitalScreen"
           component={AdminUpdateVitalsScreen}
           options={{ title: "Vital Update" }}
+        />
+        <Stack.Screen
+          name="DoctorPatientLookupScreen"
+          component={DoctorPatientLookupScreen}
+          options={{ title: "Patient Lookup Screen" }}
+        />
+        <Stack.Screen
+          name="DoctorLabLookupScreen"
+          component={DoctorLabLookupScreen}
+          options={{ title: "Lab Report Lookup Screen" }}
         />
 
 

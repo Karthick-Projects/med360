@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException,Body
 from typing import List
 from datetime import datetime, timedelta
 from models import CreateAppointmentModel, TimeSlot
@@ -86,3 +86,61 @@ def create_appointment(data: CreateAppointmentModel):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create appointment: {str(e)}")
+
+@router.get("/doctor/{doctor_id}/today")
+def get_today_appointments(doctor_id: str):
+    try:
+        today_iso = datetime.now().strftime("%Y-%m-%d")
+
+        cursor = appointments_collection.find({
+            "doctor_id": doctor_id,
+            "date": today_iso
+        })
+
+        appointments = []
+        for doc in cursor:
+            appointments.append({
+                "id": str(doc["_id"]),
+                "patientId": doc.get("patient_id"),
+                "phone": doc.get("mobilenumber"),
+                "reason": doc.get("reason"),
+                "date": doc.get("date"),
+                "time": doc.get("time"),
+                "status": doc.get("status")  # Pending or Completed
+            })
+
+        return appointments
+
+    except Exception as e:
+        print("Error:", e)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@router.put("/status")
+def update_appointment_status(payload: dict = Body(...)):
+    """
+    Expects JSON: {"id": "65ae...", "status": "Completed"}
+    """
+    appointment_id = payload.get("id")
+    new_status = payload.get("status")
+
+    if not appointment_id or not new_status:
+        raise HTTPException(status_code=400, detail="Missing id or status in request")
+
+    try:
+        # Convert the string ID to a MongoDB ObjectId
+        obj_id = ObjectId(appointment_id)
+        
+        # Perform the update
+        result = appointments_collection.update_one(
+            {"_id": obj_id},
+            {"$set": {"status": new_status}}
+        )
+
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+
+        return {"message": "Status updated successfully", "status": new_status}
+
+    except Exception as e:
+        print(f"Update Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update status")
