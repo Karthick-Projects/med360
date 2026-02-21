@@ -292,17 +292,20 @@ const handleBooking = () => {
     return;
   }
 
+  const year = now.getFullYear();
+  const month = String(selectedMonth + 1).padStart(2, "0");
+  const day = String(selectedDay).padStart(2, "0");
+
   const appointmentData = {
     patient_id: patientId,
     doctor_id: selectedDoctor.id,
-    date: new Date(now.getFullYear(), selectedMonth, selectedDay)
-      .toISOString()
-      .split("T")[0],
+    date: `${year}-${month}-${day}`,
     time: selectedSlot.time,
     reason: reason.trim(),
-    mobilenumber: mobilenumber,
-    status: 'Pending'
+    mobilenumber,
+    status: "Pending",
   };
+
 
   fetch(`${SERVER_URL}/appointments/create`, {
     method: "POST",

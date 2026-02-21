@@ -3,6 +3,7 @@ from typing import List
 from pydantic import BaseModel
 from models import Doctor,PrescriptionPayload
 from database import doctors_collection,prescription_collection
+from datetime import datetime
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
 @router.get("/", response_model=List[Doctor])
@@ -34,8 +35,12 @@ def get_user(user_id: str):
 
 @router.post("/save-prescriptions")
 def create_prescription(payload: PrescriptionPayload):
-    # Insert the prescription into MongoDB
-    result = prescription_collection.insert_one(payload.dict())
-    if not result.inserted_id:
-        raise HTTPException(status_code=500, detail="Failed to save prescription")
-    return {"message": "Prescription saved successfully", "id": str(result.inserted_id)}
+    data = payload.dict()
+    data["timestamp"] = datetime.utcnow()
+
+    result = prescription_collection.insert_one(data)
+
+    return {
+        "message": "Prescription saved successfully",
+        "id": str(result.inserted_id)
+    }

@@ -7,9 +7,12 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import SERVER_URL from "../../config";
+
 const UserMasterRegistrationScreen = () => {
   const [userType, setUserType] = useState("");
   const [userId, setUserId] = useState("");
@@ -20,35 +23,52 @@ const UserMasterRegistrationScreen = () => {
   const [contact, setContact] = useState("");
   const [status, setStatus] = useState("");
 
-  // Doctor-specific time slots
+  // Doctor-specific
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [profilePic, setProfilePic] = useState<string | null>(null);
 
-  // Generate AM/PM slots dynamically
+  // Generate time slots
   useEffect(() => {
     if (userType.toLowerCase() === "doctor") {
       const slots: string[] = [];
       for (let hour = startHour; hour < endHour; hour++) {
-        const dt = new Date();
-        dt.setHours(hour, 0);
-        let ampm = hour >= 12 ? "PM" : "AM";
-        let hr = hour % 12 || 12;
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const hr = hour % 12 || 12;
         slots.push(`${hr}:00 ${ampm}`);
       }
       setTimeSlots(slots);
     } else {
       setTimeSlots([]);
       setSelectedSlots([]);
+      setProfilePic(null);
     }
   }, [userType, startHour, endHour]);
 
   const toggleSlot = (slot: string) => {
-    if (selectedSlots.includes(slot)) {
-      setSelectedSlots(selectedSlots.filter((s) => s !== slot));
-    } else {
-      setSelectedSlots([...selectedSlots, slot]);
+    setSelectedSlots((prev) =>
+      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
+    );
+  };
+
+  // 📸 Pick Image (Doctor only)
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission required", "Gallery access is required");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.4,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      setProfilePic(result.assets[0].base64);
     }
   };
 
@@ -58,7 +78,6 @@ const UserMasterRegistrationScreen = () => {
       return;
     }
 
-    // Include doctor slots in payload if user is doctor
     const payload: any = {
       userType,
       userId,
@@ -70,19 +89,22 @@ const UserMasterRegistrationScreen = () => {
     };
 
     if (userType.toLowerCase() === "doctor") {
+      if (selectedSlots.length === 0) {
+        Alert.alert("Validation Error", "Select at least one time slot");
+        return;
+      }
       payload.timeSlots = selectedSlots;
+      payload.profile_pic = profilePic;
     }
 
-    // Post to backend
     fetch(`${SERVER_URL}/admin/create-user`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     })
       .then((res) => res.json())
-      .then((data) => {
-        Alert.alert("Success", `${userType} registered successfully\nUser ID: ${userId}`);
-        // Reset form
+      .then(() => {
+        Alert.alert("Success", `${userType} registered successfully`);
         setUserType("");
         setUserId("");
         setPassword("");
@@ -91,8 +113,9 @@ const UserMasterRegistrationScreen = () => {
         setContact("");
         setStatus("");
         setSelectedSlots([]);
+        setProfilePic(null);
       })
-      .catch((err) => Alert.alert("Error", "Failed to register user"));
+      .catch(() => Alert.alert("Error", "Failed to register user"));
   };
 
   return (
@@ -101,75 +124,52 @@ const UserMasterRegistrationScreen = () => {
 
       <View style={styles.card}>
         <Text style={styles.label}>User Type *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Patient / Doctor / Admin"
-          value={userType}
-          onChangeText={setUserType}
-        />
+        <TextInput style={styles.input} value={userType} onChangeText={setUserType} />
 
         <Text style={styles.label}>User ID *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="PID001 / DID001 / AID001"
-          value={userId}
-          onChangeText={setUserId}
-        />
+        <TextInput style={styles.input} value={userId} onChangeText={setUserId} />
 
         <Text style={styles.label}>Password *</Text>
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
-            placeholder="Enter password"
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
           />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-            <Ionicons
-              name={showPassword ? "eye-off-outline" : "eye-outline"}
-              size={22}
-              color="#6b7280"
-            />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} />
           </TouchableOpacity>
         </View>
 
         <Text style={styles.label}>Full Name *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter full name"
-          value={name}
-          onChangeText={setName}
-        />
+        <TextInput style={styles.input} value={name} onChangeText={setName} />
 
         <Text style={styles.label}>Role / Specialization</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Doctor specialization / Admin role"
-          value={roleOrSpec}
-          onChangeText={setRoleOrSpec}
-        />
+        <TextInput style={styles.input} value={roleOrSpec} onChangeText={setRoleOrSpec} />
 
         <Text style={styles.label}>Contact *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Phone / Email"
-          value={contact}
-          onChangeText={setContact}
-        />
+        <TextInput style={styles.input} value={contact} onChangeText={setContact} />
 
-        <Text style={styles.label}>Account Status</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Active / Inactive"
-          value={status}
-          onChangeText={setStatus}
-        />
+        <Text style={styles.label}>Status</Text>
+        <TextInput style={styles.input} value={status} onChangeText={setStatus} />
 
-        {/* --- Time Slots Section for Doctor --- */}
+        {/* Doctor Section */}
         {userType.toLowerCase() === "doctor" && (
           <>
-            <Text style={[styles.label, { marginTop: 16 }]}>Available Time Slots</Text>
+            <Text style={styles.label}>Profile Picture</Text>
+            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}>
+              <Text style={styles.uploadText}>Upload Photo</Text>
+            </TouchableOpacity>
+
+            {profilePic && (
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${profilePic}` }}
+                style={styles.preview}
+              />
+            )}
+
+            <Text style={styles.label}>Available Time Slots</Text>
             <View style={styles.slotContainer}>
               {timeSlots.map((slot) => (
                 <TouchableOpacity
@@ -180,11 +180,7 @@ const UserMasterRegistrationScreen = () => {
                   ]}
                   onPress={() => toggleSlot(slot)}
                 >
-                  <Text
-                    style={{
-                      color: selectedSlots.includes(slot) ? "#fff" : "#1f2937",
-                    }}
-                  >
+                  <Text style={{ color: selectedSlots.includes(slot) ? "#fff" : "#000" }}>
                     {slot}
                   </Text>
                 </TouchableOpacity>
@@ -200,6 +196,7 @@ const UserMasterRegistrationScreen = () => {
     </ScrollView>
   );
 };
+
 
 /* ---------------- Styles ---------------- */
 
@@ -291,6 +288,32 @@ const styles = StyleSheet.create({
   slotTextSelected: {
     color: "#ffffff",
   },
+uploadBtn: {
+  backgroundColor: "#2563eb",
+  paddingVertical: 12,
+  borderRadius: 8,
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: 12,
+},
+
+uploadText: {
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: "600",
+},
+
+preview: {
+  width: 120,
+  height: 120,
+  borderRadius: 60,
+  alignSelf: "center",
+  marginTop: 10,
+  marginBottom: 16,
+  borderWidth: 2,
+  borderColor: "#e5e7eb",
+  backgroundColor: "#f3f4f6",
+},
 
 });
 

@@ -192,7 +192,7 @@ const AuthScreen = ({ navigation }: any) => {
           {/* LOGIN */}
           {tab === "login" && (
             <>
-              <Text style={styles.title}>Patient Login</Text>
+              <Text style={styles.title}>Login</Text>
 
               {/* {storedPid && (
                 <View style={styles.pidBox}>

@@ -181,7 +181,7 @@ const DoctorVitalsLookup = () => {
           <Ionicons name="search" size={20} color="#64748B" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search Patient ID (e.g., PID001)"
+            placeholder="Search Patient ID"
             value={searchId}
             onChangeText={setSearchId}
             autoCapitalize="characters"

@@ -203,22 +203,22 @@ const CreateDigitalPrescriptionScreen: React.FC<{ route: any }> = ({ route }) =>
       return;
     }
 
-    const payload = {
-      doctorName,
-      doctorRole,
-      doctorDepartment,
-      patientId: patientData.id,
-      patientName: patientData.name,
-      disease: patientData.disease,
-      medications: prescriptionList.map((item) => ({
-        name: item.medicationName,
-        dosageMorning: item.dosageMorning,
-        dosageAfternoon: item.dosageAfternoon,
-        dosageNight: item.dosageNight,
-        instructions: item.instructions,
-      })),
-      timestamp: new Date().toISOString(),
+const payload = {
+  doctorName: doctorName || "",
+  doctorRole: doctorRole || "",
+  doctorDepartment: doctorDepartment || "",
+  patientId: String(patientData.id),
+  patientName: patientData.name || "",
+  disease: patientData.disease || "",   // ✅ prevent undefined
+  medications: prescriptionList.map(item => ({
+    name: item.medicationName,           // MUST exist
+    dosageMorning: item.dosageMorning ?? null,
+    dosageAfternoon: item.dosageAfternoon ?? null,
+    dosageNight: item.dosageNight ?? null,
+    instructions: item.instructions ?? null,
+  })),
     };
+
 
     try {
       const response = await fetch(`${SERVER_URL}/doctors/save-prescriptions`, {

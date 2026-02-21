@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ff2ffff",
     borderRadius: 18,
     padding: 16,
-    elevation: 3,
+    elevation: 2,
   },
   label: {
     fontSize: 13,

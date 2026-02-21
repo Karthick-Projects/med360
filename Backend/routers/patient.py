@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from database import lab_report_collection, users_collection,prescription_collection,vitals_collection
 from models import PatientProfile,PrescriptionOut
 from typing import List
-
+from datetime import datetime
 router = APIRouter(prefix="/patient", tags=["Lab Reports"])
 
 @router.get("/lab-reports/{patientId}")
@@ -73,9 +73,13 @@ def get_prescriptions(patient_id: str):
             "doctorName": doc["doctorName"],
             "doctorRole": doc["doctorRole"],
             "doctorDepartment": doc["doctorDepartment"],
-            "disease": doc.get("disease", ""),
+            "disease": doc.get("disease"),
             "status": doc.get("status", "Current"),
-            "dateIssued": doc.get("timestamp", ""),
+            "dateIssued": (
+                doc["timestamp"]
+                if isinstance(doc.get("timestamp"), datetime)
+                else None
+            ),
             "medications": doc.get("medications", [])
         })
 
@@ -86,6 +90,7 @@ def get_prescriptions(patient_id: str):
         )
 
     return prescriptions
+
 
 
 @router.get("/vitals/{patient_id}")

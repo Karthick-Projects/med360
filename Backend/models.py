@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from datetime import datetime
 class LoginModel(BaseModel):
     phone: str
     password: str
@@ -41,8 +42,9 @@ class UserMasterCreate(BaseModel):
     name: str
     roleOrSpec: Optional[str] = None
     contact: str
-    status: Optional[str] = "Active"
-    timeSlots: Optional[List[str]] = []  # only for doctors
+    status: Optional[str] = None
+    timeSlots: Optional[List[str]] = None
+    profile_pic: Optional[str] = None
 
 class UserMasterResponse(BaseModel):
     message: str
@@ -138,10 +140,11 @@ class PatientProfile(BaseModel):
 
 class Medication(BaseModel):
     name: str
-    dosageMorning: str
-    dosageAfternoon: str
-    dosageNight: str
-    instructions: str
+    dosageMorning: Optional[str] = None
+    dosageAfternoon: Optional[str] = None
+    dosageNight: Optional[str] = None
+    instructions: Optional[str] = None
+
 
 class PrescriptionPayload(BaseModel):
     doctorName: str
@@ -149,9 +152,9 @@ class PrescriptionPayload(BaseModel):
     doctorDepartment: str
     patientId: str
     patientName: str
-    disease: str
-    medications: List[Medication]
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    disease: Optional[str] = None   # ✅ FIX
+    medications: list[Medication]
+    timestamp: Optional[datetime] = None
 
 class PrescriptionOut(BaseModel):
     id: str
@@ -159,9 +162,9 @@ class PrescriptionOut(BaseModel):
     doctorName: str
     doctorRole: str
     doctorDepartment: str
-    disease: str
+    disease: Optional[str] = None
     status: str
-    dateIssued: str
+    dateIssued: Optional[datetime] = None   # ✅ REQUIRED
     medications: list[Medication]
 
 

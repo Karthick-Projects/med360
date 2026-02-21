@@ -28,67 +28,6 @@ type DashboardCardProps = {
   variant?: "default" | "rectangle";
 };
 
-type QuickStatProps = {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  color: string;
-};
-
-type PatientInfo = {
-  id: string;
-  name: string;
-  time: string;
-  reason: string;
-  avatar: string;
-};
-
-/* ---------------- MOCK DATA ---------------- */
-
-const QUICK_STATS_DATA: QuickStatProps[] = [
-  {
-    label: "Today's Appts",
-    value: 12,
-    icon: <Ionicons name="calendar" size={18} color="#fff" />,
-    color: "#4A90E2",
-  },
-  {
-    label: "Pending Results",
-    value: 4,
-    icon: <FontAwesome5 name="flask" size={16} color="#fff" />,
-    color: "#FF8C00",
-  },
-  {
-    label: "New Patients",
-    value: 2,
-    icon: <Ionicons name="person-add" size={18} color="#fff" />,
-    color: "#50C878",
-  },
-];
-
-const UPCOMING_PATIENTS: PatientInfo[] = [
-  {
-    id: "1",
-    name: "Aarav Sharma",
-    time: "10:00 AM",
-    reason: "Routine Checkup",
-    avatar: "https://via.placeholder.com/150/4A90E2/ffffff?text=AS",
-  },
-  {
-    id: "2",
-    name: "Priya Patel",
-    time: "11:30 AM",
-    reason: "Follow-up",
-    avatar: "https://via.placeholder.com/150/FF8C00/ffffff?text=PP",
-  },
-  {
-    id: "3",
-    name: "Mohan Lal",
-    time: "02:00 PM",
-    reason: "Stomach Pain",
-    avatar: "https://via.placeholder.com/150/6A5ACD/ffffff?text=ML",
-  },
-];
 
 /* ---------------- COMPONENTS ---------------- */
 
@@ -127,38 +66,6 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   );
 };
 
-const QuickStatCard: React.FC<QuickStatProps> = ({
-  label,
-  value,
-  icon,
-  color,
-}) => (
-  <View style={styles.statCard}>
-    <View style={[styles.statIcon, { backgroundColor: color }]}>{icon}</View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.statValue}>{value != null ? String(value) : "0"}</Text>
-      <Text style={styles.statLabel}>{label || ""}</Text>
-    </View>
-  </View>
-);
-
-const PatientRow: React.FC<PatientInfo> = ({
-  name,
-  time,
-  reason,
-  avatar,
-}) => (
-  <TouchableOpacity style={styles.patientRow} activeOpacity={0.7}>
-    <Image source={{ uri: avatar }} style={styles.patientAvatar} />
-    <View style={{ flex: 1 }}>
-      <Text style={styles.patientName}>{name || ""}</Text>
-      <Text style={styles.patientReason}>{reason || ""}</Text>
-    </View>
-    <View style={styles.patientTimeContainer}>
-      <Text style={styles.patientTime}>{time || ""}</Text>
-    </View>
-  </TouchableOpacity>
-);
 
 /* ---------------- MAIN SCREEN ---------------- */
 
@@ -196,14 +103,10 @@ const DoctorDashboard = ({ navigation, route }: any) => {
           <View style={styles.headerContent}>
             <View>
               <Text style={styles.headerTitle}>
-                Welcome Back, {doctorName || ""}
+                Welcome Back,
               </Text>
-              <Text style={styles.headerSubtitle}>
-                You have{" "}
-                <Text style={{ fontWeight: "bold" }}>
-                  {String(QUICK_STATS_DATA[0].value || 0)}
-                </Text>{" "}
-                appointments today
+              <Text style={styles.headerTitle}>
+              {doctorName || ""}
               </Text>
             </View>
 
@@ -213,29 +116,24 @@ const DoctorDashboard = ({ navigation, route }: any) => {
                 height: 120,
                 borderRadius: 60,
                 overflow: "hidden",
+                backgroundColor: "#e5e7eb",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               {user.profile_pic ? (
                 <Image
                   source={{ uri: `data:image/jpeg;base64,${user.profile_pic}` }}
                   style={{ width: "100%", height: "100%" }}
-                  resizeMode="contain"
+                  resizeMode="cover"
                 />
               ) : (
-                <View style={{ flex: 1, backgroundColor: "#ccc" }} />
+                <Ionicons name="person-circle-outline" size={120} color="#9ca3af" />
               )}
             </View>
           </View>
         </View>
 
-        {/* QUICK STATS */}
-        <View style={styles.statsWrapper}>
-          <View style={styles.statsContainer}>
-            {QUICK_STATS_DATA.map((stat, index) => (
-              <QuickStatCard key={index} {...stat} />
-            ))}
-          </View>
-        </View>
 
         {/* RECTANGLE CARD */}
         <View style={styles.section}>
@@ -290,12 +188,6 @@ const DoctorDashboard = ({ navigation, route }: any) => {
           />
         </View>
 
-        {/* PATIENT LIST */}
-        <Text style={styles.sectionTitle}>Upcoming Patients</Text>
-        {UPCOMING_PATIENTS.map((p) => (
-          <PatientRow key={p.id} {...p} />
-        ))}
-
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -316,7 +208,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#1B2C57",
     padding: 20,
     paddingTop: 50,
-    paddingBottom: 60,
     borderBottomLeftRadius: 35,
     borderBottomRightRadius: 35,
     marginBottom: 10,

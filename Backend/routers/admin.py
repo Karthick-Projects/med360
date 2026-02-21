@@ -14,7 +14,6 @@ def create_user(user: UserMasterCreate):
     if user_type not in ["patient", "doctor", "admin"]:
         raise HTTPException(status_code=400, detail="Invalid user type")
 
-    # Check duplicates
     if (
         users_collection.find_one({"userId": user.userId})
         or doctors_collection.find_one({"doctorId": user.userId})
@@ -22,40 +21,36 @@ def create_user(user: UserMasterCreate):
     ):
         raise HTTPException(status_code=400, detail="User ID already exists")
 
-
     if user_type == "admin":
-        admin_doc = {
+        admin_collection.insert_one({
             "adminId": user.userId,
             "password": user.password,
             "name": user.name,
             "role": user.roleOrSpec or "Admin",
             "contact": user.contact,
             "status": user.status,
-        }
-        admin_collection.insert_one(admin_doc)
+        })
 
     elif user_type == "doctor":
-        # Validate doctor availability
-        if not user.timeSlots or len(user.timeSlots) == 0:
-            raise HTTPException(status_code=400, detail="Doctor timeSlots are required")
+        if not user.timeSlots:
+            raise HTTPException(status_code=400, detail="Doctor timeSlots required")
 
-        # Insert into users
         doctors_collection.insert_one({
             "doctorId": user.userId,
-            "role": user_type,
+            "role": "doctor",
             "password": user.password,
             "name": user.name,
             "roleOrSpec": user.roleOrSpec,
             "contact": user.contact,
             "status": user.status,
-            "timeSlots": user.timeSlots
+            "timeSlots": user.timeSlots,
+            "profile_pic": user.profile_pic,  # ✅ Base64 stored here
         })
 
-
-    else:  # patient
+    else:
         users_collection.insert_one({
             "userId": user.userId,
-            "userType": user_type,
+            "userType": "patient",
             "password": user.password,
             "name": user.name,
             "roleOrSpec": user.roleOrSpec,
@@ -63,7 +58,10 @@ def create_user(user: UserMasterCreate):
             "status": user.status,
         })
 
-    return {"message": f"{user.userType} created successfully", "user_id": user.userId}
+    return {
+        "message": f"{user.userType} created successfully",
+        "user_id": user.userId
+    }
 
 
 @router.post("/patient-register", response_model=PatientResponse)
