@@ -101,8 +101,10 @@ def register_patient(patient: PatientCreate):
 def get_patient_by_id(patient_id: str):
 
     patient = users_collection.find_one({
-        "userId": patient_id,
-        "userType": "patient"
+        "$or": [
+            {"user_id": patient_id},
+            {"mobile": patient_id}
+        ]
     })
 
     if not patient:
@@ -123,14 +125,28 @@ def get_patient_by_id(patient_id: str):
 @router.post("/admission-create")
 def create_admission(admission: AdmissionCreate):
 
-    # Check patient exists
+    MAX_BEDS = 6
+
     patient = users_collection.find_one({
-        "userId": admission.patientId,
-        "userType": "patient"
+        "$or": [
+            {"user_id": admission.patientId},
+            {"mobile": admission.patientId}
+        ]
     })
 
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+
+    # 🔍 Check ward capacity
+    occupied_beds = admission_collection.count_documents({
+        "ward": admission.ward
+    })
+
+    if occupied_beds >= MAX_BEDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No beds available in ward {admission.ward}"
+        )
 
     # Generate Admission ID
     admission_id = "ADM-" + str(100000 + admission_collection.count_documents({}) + 1)
@@ -139,7 +155,6 @@ def create_admission(admission: AdmissionCreate):
         "admissionId": admission_id,
         "patientId": admission.patientId,
         "patientName": patient.get("name"),
-        "admissionType": admission.admissionType,
         "ward": admission.ward,
         "bedNumber": admission.bedNumber,
         "admissionDateTime": datetime.now().isoformat()
@@ -147,7 +162,10 @@ def create_admission(admission: AdmissionCreate):
 
     admission_collection.insert_one(admission_doc)
 
-    return {"message": "Admission created successfully", "admissionId": admission_id}
+    return {
+        "message": "Admission created successfully",
+        "admissionId": admission_id
+    }
 
 @router.post("/doctor-department-assign")
 def assign_doctor(assignment: DoctorAssignment):
@@ -181,7 +199,7 @@ def assign_doctor(assignment: DoctorAssignment):
 
 @router.get("/get-user/{userId}")
 def get_user(userId: str):
-    user = users_collection.find_one({"userId": userId}) \
+    user = users_collection.find_one({"user_id": userId}) \
            or doctors_collection.find_one({"doctorId": userId}) \
            or admin_collection.find_one({"adminId": userId})
     if not user:
@@ -293,3 +311,39 @@ def update_patient_vitals(vitals: VitalsCreate):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to update vitals")
+
+@router.get("/ward-bed-status/{ward}")
+def ward_bed_status(ward: str):
+
+    MAX_BEDS = 6
+
+    occupied_beds = admission_collection.count_documents({"ward": ward})
+
+    available_beds = MAX_BEDS - occupied_beds
+
+    return {
+        "ward": ward,
+        "occupiedBeds": occupied_beds,
+        "availableBeds": available_beds,
+        "totalBeds": MAX_BEDS
+    }
+
+@router.get("/pending-discharges")
+def admin_get_pending_discharges():
+    # Fetch everyone who has a discharge_date but hasn't been finalized yet
+    cursor = db["appointments"].find({
+        "status": "Admitted",
+        "discharge_date": {"$ne": None}
+    })
+    
+    results = []
+    for doc in cursor.to_list(length=500):
+        results.append({
+            "id": str(doc["_id"]),
+            "patient_name": doc.get("patient_name"),
+            "doctor_name": doc.get("doctor_name"), # Ensure this is stored in appointment doc
+            "ward_no": doc.get("ward_no"),
+            "bed_no": doc.get("bed_no"),
+            "discharge_date": doc.get("discharge_date")
+        })
+    return results

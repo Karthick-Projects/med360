@@ -28,7 +28,6 @@ import AdminDashboard from './screens/Admin/AdminDashboard';
 import PatientRegistrationScreen from "./screens/Admin/PatientRegistrationScreen";
 import AdmissionDetailsScreen from "./screens/Admin/AdmissionDetailsScreen";
 import DoctorDepartmentAssignmentScreen from "./screens/Admin/DoctorDepartmentAssignmentScreen";
-import DoctorExperienceScreen from "./screens/Admin/DoctorExperienceScreen";
 import StaffManagementScreen from "./screens/Admin/StaffManagementScreen";
 import PharmacyInventoryScreen from "./screens/Admin/PharmacyInventoryScreen";
 import LabManagementScreen from "./screens/Admin/LabManagementScreen";
@@ -36,6 +35,9 @@ import AdminUpdateVitalsScreen from './screens/Admin/UpdateVitalsScreen';
 import UserMasterRegistrationScreen from './screens/Admin/UserMasterRegistrationScreen';
 import DoctorPatientLookupScreen from './screens/Doctor/DoctorPatientLookupScreen';
 import DoctorLabLookupScreen from './screens/Doctor/DoctorLabLookupScreen';
+import BookNewAppointmentAdmin from './screens/Admin/BookNewAppointmentAdmin';
+import AdminDischargeScreen from './screens/Admin/AdminDischargeScreen';
+import DoctorInPatientsScreen from './screens/Doctor/DoctorInPatientsScreen';
 const Stack = createNativeStackNavigator();
 
 const App = () => {
@@ -173,12 +175,6 @@ const App = () => {
           options={{ title: "Doctor & Department" }}
         />
 
-        {/* <Stack.Screen
-          name="DoctorExperience"
-          component={DoctorExperienceScreen}
-          options={{ title: "Doctor Experience" }}
-        /> */}
-
         <Stack.Screen
           name="StaffManagement"
           component={StaffManagementScreen}
@@ -211,6 +207,21 @@ const App = () => {
           name="DoctorLabLookupScreen"
           component={DoctorLabLookupScreen}
           options={{ title: "Lab Report Lookup Screen" }}
+        />
+        <Stack.Screen
+          name="BookNewAppointmentAdmin"
+          component={BookNewAppointmentAdmin}
+          options={{ title: "Book New Appointment Admin" }}
+        />
+        <Stack.Screen
+          name="DoctorInPatientsScreen"
+          component={DoctorInPatientsScreen}
+          options={{ title: "DoctorInPatientsScreen" }}
+        />
+        <Stack.Screen
+          name="AdminDischargeScreen"
+          component={AdminDischargeScreen}
+          options={{ title: "AdminDischargeScreen" }}
         />
 
 

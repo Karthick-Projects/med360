@@ -10,10 +10,9 @@ import {
   SafeAreaView,
   ActivityIndicator
 } from "react-native";
-import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
-import SERVER_URL from '../../config';
+import { Ionicons, MaterialIcons, FontAwesome5, FontAwesome } from "@expo/vector-icons"; // Added FontAwesomeimport SERVER_URL from '../../config';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import SERVER_URL from '../../config';
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width / 2 - 25;
 
@@ -92,7 +91,6 @@ const DoctorDashboard = ({ navigation, route }: any) => {
   }, []);
 
   if (loading) return <ActivityIndicator size="large" style={{ flex: 1, justifyContent: 'center' }} />;
-
   if (!user) return <Text style={{ flex: 1, textAlign: 'center', marginTop: 20 }}>Failed to load user</Text>;
 
   return (
@@ -102,25 +100,11 @@ const DoctorDashboard = ({ navigation, route }: any) => {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.headerTitle}>
-                Welcome Back,
-              </Text>
-              <Text style={styles.headerTitle}>
-              {doctorName || ""}
-              </Text>
+              <Text style={styles.headerTitle}>Welcome Back,</Text>
+              <Text style={styles.headerTitle}>{doctorName || ""}</Text>
             </View>
 
-            <View
-              style={{
-                width: 120,
-                height: 120,
-                borderRadius: 60,
-                overflow: "hidden",
-                backgroundColor: "#e5e7eb",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+            <View style={styles.profilePicWrapper}>
               {user.profile_pic ? (
                 <Image
                   source={{ uri: `data:image/jpeg;base64,${user.profile_pic}` }}
@@ -134,8 +118,7 @@ const DoctorDashboard = ({ navigation, route }: any) => {
           </View>
         </View>
 
-
-        {/* RECTANGLE CARD */}
+        {/* RECTANGLE CARD - MAIN ACTION */}
         <View style={styles.section}>
           <DashboardCard
             title="View Appointments"
@@ -149,6 +132,16 @@ const DoctorDashboard = ({ navigation, route }: any) => {
 
         {/* GRID CARDS */}
         <View style={styles.cardsContainer}>
+          
+          {/* NEW: IN-PATIENTS CARD */}
+          <DashboardCard
+            title="In-Patients (IPD)"
+            color="#00A896"
+            shadowColor="#006d61"
+            icon={<FontAwesome5 name="procedures" size={24} color="#fff" />}
+            onPress={() => navigation.navigate("DoctorInPatientsScreen")}
+          />
+
           <DashboardCard
             title="Patient Medical History"
             color="#6A5ACD"
@@ -173,9 +166,9 @@ const DoctorDashboard = ({ navigation, route }: any) => {
             onPress={() =>
               navigation.navigate("CreateDigitalPrescriptionScreen", {
                 doctorName,
-          doctorRole: user.role,
-          doctorDepartment: user.roleOrSpec
-        })
+                doctorRole: user.role,
+                doctorDepartment: user.roleOrSpec
+              })
             }
           />
 
@@ -194,16 +187,14 @@ const DoctorDashboard = ({ navigation, route }: any) => {
   );
 };
 
-export default DoctorDashboard;
-
-/* ---------------- STYLES ---------------- */
+/* ---------------- UPDATED STYLES ---------------- */
 
 const styles = StyleSheet.create({
+  /* ... previous styles remain same ... */
   container: {
     flex: 1,
     backgroundColor: "#F4F6F8",
   },
-
   header: {
     backgroundColor: "#1B2C57",
     padding: 20,
@@ -212,84 +203,31 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 35,
     marginBottom: 10,
   },
-
   headerContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-
   headerTitle: {
     color: "#fff",
     fontSize: 24,
     fontWeight: "800",
   },
-
-  headerSubtitle: {
-    color: "#BCCAEF",
-    marginTop: 6,
-    fontSize: 14,
-  },
-
-  statsWrapper: {
-    marginTop: -40,
-    paddingHorizontal: 15,
-  },
-
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  statCard: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 15,
-    flexDirection: "row",
+  profilePicWrapper: {
+    width: 100, // Adjusted slightly for better fit
+    height: 100,
+    borderRadius: 50,
+    overflow: "hidden",
+    backgroundColor: "#e5e7eb",
     alignItems: "center",
-    width: width / 3 - 20,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 5,
-  },
-
-  statIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
     justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
+    borderWidth: 2,
+    borderColor: "#fff"
   },
-
-  statValue: {
-    fontWeight: "900",
-    fontSize: 18,
-    color: "#1B2C57",
-  },
-
-  statLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-
   section: {
     paddingHorizontal: 15,
     marginTop: 25,
   },
-
-  sectionTitle: {
-    marginLeft: 15,
-    marginTop: 20,
-    marginBottom: 10,
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1B2C57",
-  },
-
   cardsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -297,7 +235,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginTop: 20,
   },
-
   card: {
     width: CARD_WIDTH,
     height: 140,
@@ -308,7 +245,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 5 },
   },
-
   rectangleCard: {
     width: "100%",
     height: 90,
@@ -317,71 +253,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
   },
-
   iconContainer: {
     padding: 10,
     borderRadius: 12,
+    alignSelf: 'flex-start'
   },
-
   cardText: {
     color: "#fff",
     fontWeight: "800",
-    fontSize: 16,
-    flex: 1,
-  },
-
-  patientRow: {
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 15,
-    marginHorizontal: 15,
-    marginBottom: 10,
-    borderRadius: 15,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 3,
-  },
-
-  patientAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 15,
-  },
-
-  patientName: {
-    fontWeight: "700",
-    fontSize: 15,
-    color: "#1B2C57",
-  },
-
-  patientReason: {
-    fontSize: 12,
-    color: "#888",
-    marginTop: 2,
-  },
-
-  patientTimeContainer: {
-    backgroundColor: "#F0F0F5",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-
-  patientTime: {
-    fontWeight: "700",
-    fontSize: 13,
-    color: "#4A90E2",
-  },
-
-  profilePic: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 3,
-    borderColor: "#F8E5A7",
+    fontSize: 15, // Reduced slightly to accommodate longer text like "In-Patients"
+    flexShrink: 1,
   },
 });
+
+export default DoctorDashboard;

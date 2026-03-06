@@ -11,7 +11,7 @@ import {
   Alert,
   StatusBar,
 } from "react-native";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SERVER_URL from "../../config";
 
@@ -25,6 +25,7 @@ type Appointment = {
   date: string;
   time: string;
   status: "Pending" | "Completed";
+  is_emergency?: boolean; // New Field
 };
 
 /* ================= TAB BUTTON ================= */
@@ -44,12 +45,23 @@ const TabButton = ({ label, active, onPress }: any) => (
 
 const AppointmentCard = ({ item, onApprove }: any) => {
   const isPending = item.status === "Pending";
-  const color = isPending ? "#F59E0B" : "#10B981";
+  const isEmergency = item.is_emergency;
+  
+  // Logic: Emergency gets Red, Completed gets Green, Pending gets Orange
+  const color = isEmergency && isPending ? "#DC2626" : (isPending ? "#F59E0B" : "#10B981");
 
   return (
-    <View style={[styles.card, { borderLeftColor: color }]}>
+    <View style={[styles.card, { borderLeftColor: color }, isEmergency && isPending && styles.emergencyCardShadow]}>
       <View style={styles.cardHeader}>
-        <Text style={styles.patientId}>ID: {item.patientId}</Text>
+        <View style={styles.headerLeft}>
+            <Text style={styles.patientId}>ID: {item.patientId}</Text>
+            {isEmergency && isPending && (
+                <View style={styles.emergencyBadge}>
+                    <MaterialCommunityIcons name="flash" size={12} color="#FFF" />
+                    <Text style={styles.emergencyText}>EMERGENCY</Text>
+                </View>
+            )}
+        </View>
         <Text style={[styles.statusText, { color }]}>{item.status}</Text>
       </View>
 
@@ -57,7 +69,7 @@ const AppointmentCard = ({ item, onApprove }: any) => {
 
       <Text style={styles.info}>📅 {item.date} | ⏰ {item.time}</Text>
       <Text style={styles.info}>📞 {item.phone}</Text>
-      <Text style={styles.reason}>🩺 {item.reason}</Text>
+      <Text style={[styles.reason, isEmergency && isPending && { color: "#DC2626" }]}>🩺 {item.reason}</Text>
 
       {isPending && (
         <View style={styles.actions}>
@@ -69,10 +81,10 @@ const AppointmentCard = ({ item, onApprove }: any) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.btn, styles.approveBtn]}
+            style={[styles.btn, { backgroundColor: color }]}
             onPress={() => onApprove(item.id)}
           >
-            <Text style={styles.btnText}>Approve</Text>
+            <Text style={styles.btnText}>Complete Visit</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -86,23 +98,23 @@ const ViewAppointmentsScreen = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] =
-    useState<"Pending" | "Completed">("Pending");
-
-  /* ---------- FETCH ALL TODAY APPOINTMENTS ---------- */
+  const [activeTab, setActiveTab] = useState<"Pending" | "Completed">("Pending");
 
   const fetchAppointments = async () => {
     try {
       const doctorId = await AsyncStorage.getItem("PATIENT_ID");
       if (!doctorId) return;
 
-      const res = await fetch(
-        `${SERVER_URL}/appointments/doctor/${doctorId}/today`
-      );
+      const res = await fetch(`${SERVER_URL}/appointments/doctor/${doctorId}/today`);
       const data = await res.json();
 
       if (res.ok) {
-        setAppointments(data);
+        // SORTING LOGIC: Move emergency=true to the top
+        const sortedData = data.sort((a: Appointment, b: Appointment) => {
+            if (a.is_emergency === b.is_emergency) return 0;
+            return a.is_emergency ? -1 : 1;
+        });
+        setAppointments(sortedData);
       }
     } catch (err) {
       console.error(err);
@@ -115,8 +127,6 @@ const ViewAppointmentsScreen = () => {
   useEffect(() => {
     fetchAppointments();
   }, []);
-
-  /* ---------- APPROVE ---------- */
 
   const handleApprove = useCallback(async (id: string) => {
     try {
@@ -138,7 +148,7 @@ const ViewAppointmentsScreen = () => {
   const filtered = appointments.filter(a => a.status === activeTab);
 
   if (loading) {
-    return <ActivityIndicator size="large" style={{ flex: 1 }} />;
+    return <ActivityIndicator size="large" color="#2563eb" style={{ flex: 1 }} />;
   }
 
   return (
@@ -188,32 +198,53 @@ export default ViewAppointmentsScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "#F8FAFC" },
-  title: { fontSize: 26, fontWeight: "800", marginBottom: 20 },
-  tabs: { flexDirection: "row", marginBottom: 15 },
+  title: { fontSize: 26, fontWeight: "800", marginBottom: 20, color: "#0F172A" },
+  tabs: { flexDirection: "row", marginBottom: 15, backgroundColor: "#F1F5F9", borderRadius: 10, padding: 4 },
   tabButton: { flex: 1, padding: 10, alignItems: "center" },
-  tabButtonActive: { backgroundColor: "#E2E8F0", borderRadius: 8 },
-  tabText: { fontWeight: "600" },
-  tabTextActive: { color: "#1E3A8A" },
+  tabButtonActive: { backgroundColor: "#FFF", borderRadius: 8, elevation: 2, shadowOpacity: 0.1 },
+  tabText: { fontWeight: "600", color: "#64748B" },
+  tabTextActive: { color: "#2563eb" },
 
   card: {
     backgroundColor: "#FFF",
     padding: 16,
     borderRadius: 14,
     marginBottom: 12,
-    borderLeftWidth: 5,
+    borderLeftWidth: 6,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
   },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between" },
-  patientId: { fontWeight: "700" },
-  statusText: { fontWeight: "700" },
-  separator: { height: 1, backgroundColor: "#E5E7EB", marginVertical: 8 },
-  info: { fontSize: 13, color: "#475569" },
-  reason: { fontWeight: "600", marginTop: 6 },
+  emergencyCardShadow: {
+    shadowColor: "#DC2626",
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    backgroundColor: "#FFF5F5",
+  },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: 'center' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  patientId: { fontWeight: "700", fontSize: 15 },
+  
+  emergencyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: "#DC2626",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 10,
+  },
+  emergencyText: { color: "#FFF", fontSize: 10, fontWeight: "900", marginLeft: 3 },
 
-  actions: { flexDirection: "row", marginTop: 10 },
-  btn: { flex: 1, padding: 10, borderRadius: 8, alignItems: "center" },
-  callBtn: { backgroundColor: "#3B82F6", marginRight: 6 },
-  approveBtn: { backgroundColor: "#10B981" },
+  statusText: { fontWeight: "700", textTransform: 'uppercase', fontSize: 12 },
+  separator: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 10 },
+  info: { fontSize: 14, color: "#475569", marginBottom: 4 },
+  reason: { fontWeight: "600", marginTop: 6, fontSize: 15, color: "#1E293B" },
+
+  actions: { flexDirection: "row", marginTop: 15 },
+  btn: { flex: 1, padding: 12, borderRadius: 10, alignItems: "center" },
+  callBtn: { backgroundColor: "#E2E8F0", marginRight: 8 },
   btnText: { color: "#FFF", fontWeight: "700" },
 
-  empty: { textAlign: "center", marginTop: 40, color: "#94A3B8" },
+  empty: { textAlign: "center", marginTop: 40, color: "#94A3B8", fontSize: 16 },
 });

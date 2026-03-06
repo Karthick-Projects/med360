@@ -10,18 +10,33 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import SERVER_URL from "../../config";
 
+// --- Design Tokens ---
+const COLORS = {
+  primary: "#2563EB",
+  bg: "#F8FAFC",
+  white: "#FFFFFF",
+  textMain: "#1E293B",
+  textSub: "#64748B",
+  border: "#E2E8F0",
+  success: "#059669",
+  danger: "#EF4444",
+  accent: "#F1F5F9",
+  warning: "#F59E0B",
+  info: "#0EA5E9",
+};
+
 const LabManagementScreen = () => {
   /* Patient State */
   const [patientId, setPatientId] = useState("");
-  const [patientName, setPatientName] = useState("");
   const [patientDetails, setPatientDetails] = useState<any>(null);
   const [loadingPatient, setLoadingPatient] = useState(false);
 
-  /* Test Info */
+  /* Clinical Info */
   const [testName, setTestName] = useState("");
   const [technician, setTechnician] = useState("");
 
@@ -31,7 +46,7 @@ const LabManagementScreen = () => {
   const [temperature, setTemperature] = useState("");
   const [pulse, setPulse] = useState("");
 
-  /* Metrics */
+  /* Observations */
   const [metrics, setMetrics] = useState("");
   const [remarks, setRemarks] = useState("");
 
@@ -47,12 +62,10 @@ const LabManagementScreen = () => {
       const data = await res.json();
 
       if (!res.ok) {
-        Alert.alert("Not Found", data.detail || "Patient ID does not exist.");
-        setPatientName("");
+        Alert.alert("Not Found", data.detail || "Patient record does not exist.");
         return;
       }
       setPatientDetails(data);
-      setPatientName(data.name);
     } catch {
       Alert.alert("Error", "Check your internet connection.");
     } finally {
@@ -62,7 +75,7 @@ const LabManagementScreen = () => {
 
   const handleSaveLabRecord = async () => {
     if (!patientId || !testName || !technician) {
-      Alert.alert("Missing Info", "Please fill in the Patient, Test Name, and Technician.");
+      Alert.alert("Validation", "Patient, Test Name, and Technician are required.");
       return;
     }
 
@@ -71,15 +84,23 @@ const LabManagementScreen = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patientId, patientName, testName, technician,
-          bp, bloodSugar, temperature, pulse, metrics, remarks,
+          patientId,
+          patientName: patientDetails?.name,
+          testName,
+          technician,
+          bp,
+          bloodSugar,
+          temperature,
+          pulse,
+          metrics,
+          remarks,
           reportUploaded: false,
         }),
       });
 
       if (!response.ok) throw new Error();
 
-      Alert.alert("Success", "Lab record has been filed successfully.");
+      Alert.alert("Success", "Lab record filed successfully.");
       resetForm();
     } catch {
       Alert.alert("Error", "Failed to save record. Please try again.");
@@ -87,216 +108,278 @@ const LabManagementScreen = () => {
   };
 
   const resetForm = () => {
-    setPatientId(""); setPatientName(""); setPatientDetails(null);
-    setTestName(""); setTechnician(""); setBp("");
-    setBloodSugar(""); setTemperature(""); setPulse("");
-    setMetrics(""); setRemarks("");
+    setPatientId("");
+    setPatientDetails(null);
+    setTestName("");
+    setTechnician("");
+    setBp("");
+    setBloodSugar("");
+    setTemperature("");
+    setPulse("");
+    setMetrics("");
+    setRemarks("");
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"} 
-      style={{ flex: 1 }}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
     >
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Lab Management</Text>
-          <Text style={styles.subtitle}>Enter clinical findings and test results</Text>
-        </View>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Header Area */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Lab Management</Text>
+        <Text style={styles.headerSub}>Diagnostics & Clinical Metrics</Text>
+      </View>
 
-        {/* Section 1: Patient Search */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollBody}
+      >
+        {/* CARD 1: SEARCH & IDENTIFY */}
         <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="person-search-outline" size={20} color="#2563EB" />
-            <Text style={styles.sectionTitle}>Patient Verification</Text>
-          </View>
-          
-          <Text style={styles.label}>Patient ID</Text>
+          <Text style={styles.cardLabel}>SEARCH PATIENT</Text>
           <View style={styles.searchRow}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="e.g. PAT-102"
-              value={patientId}
-              onChangeText={setPatientId}
-              placeholderTextColor="#94A3B8"
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="finger-print" size={18} color={COLORS.textSub} style={styles.fieldIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="PAT-XXX"
+                value={patientId}
+                onChangeText={setPatientId}
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
             <TouchableOpacity style={styles.searchBtn} onPress={fetchPatientDetails}>
-              {loadingPatient ? <ActivityIndicator color="#fff" /> : <Ionicons name="search" size={20} color="#fff" />}
+              {loadingPatient ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Ionicons name="search" size={22} color="#fff" />
+              )}
             </TouchableOpacity>
           </View>
 
           {patientDetails && (
-            <View style={styles.patientInfoBox}>
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons name="account-check" size={20} color="#059669" />
-                <Text style={styles.patientNameText}>{patientDetails.name}</Text>
+            <View style={styles.patientProfile}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{patientDetails.name[0]}</Text>
               </View>
-              <Text style={styles.patientSubText}>DOB: {patientDetails.dob}  •  ID: {patientId}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pName}>{patientDetails.name}</Text>
+                <Text style={styles.pSub}>DOB: {patientDetails.dob} • ID: {patientId}</Text>
+              </View>
+              <View style={styles.verifiedTag}>
+                <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+              </View>
             </View>
           )}
         </View>
 
-        {/* Section 2: Test Details */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="flask-outline" size={20} color="#2563EB" />
-            <Text style={styles.sectionTitle}>Test Information</Text>
+        {/* CARD 2: VITALS DASHBOARD */}
+        <View style={[styles.card, !patientDetails && styles.disabledCard]}>
+          <Text style={styles.cardLabel}>CLINICAL VITALS</Text>
+          <View style={styles.grid}>
+            <VitalGauge 
+              icon="thermometer" 
+              label="Temp" 
+              unit="°C" 
+              color={COLORS.warning} 
+              value={temperature} 
+              setter={setTemperature} 
+              placeholder="36.5"
+            />
+            <VitalGauge 
+              icon="heart" 
+              label="Pulse" 
+              unit="bpm" 
+              color={COLORS.danger} 
+              value={pulse} 
+              setter={setPulse} 
+              placeholder="72"
+            />
           </View>
+          <View style={[styles.grid, { marginTop: 12 }]}>
+            <VitalGauge 
+              icon="water" 
+              label="Sugar" 
+              unit="mg/dL" 
+              color={COLORS.info} 
+              value={bloodSugar} 
+              setter={setBloodSugar} 
+              placeholder="95"
+            />
+            <VitalGauge 
+              icon="speedometer" 
+              label="BP" 
+              unit="mmHg" 
+              color={COLORS.primary} 
+              value={bp} 
+              setter={setBp} 
+              placeholder="120/80"
+            />
+          </View>
+        </View>
 
-          <Text style={styles.label}>Test Name</Text>
+        {/* CARD 3: TEST DETAILS */}
+        <View style={[styles.card, !patientDetails && styles.disabledCard]}>
+          <Text style={styles.cardLabel}>TEST CONFIGURATION</Text>
+          
+          <Text style={styles.fieldLabel}>Performed Test *</Text>
           <TextInput 
-            style={styles.input} 
-            placeholder="e.g. Full Blood Count" 
+            style={styles.flatInput} 
+            placeholder="e.g. CBC / HbA1c" 
             value={testName} 
             onChangeText={setTestName} 
+            editable={!!patientDetails}
           />
 
-          <Text style={styles.label}>Lab Technician</Text>
+          <Text style={styles.fieldLabel}>Assigned Technician *</Text>
           <TextInput 
-            style={styles.input} 
-            placeholder="Name of performing technician" 
+            style={styles.flatInput} 
+            placeholder="Enter Name" 
             value={technician} 
             onChangeText={setTechnician} 
+            editable={!!patientDetails}
           />
         </View>
 
-        {/* Section 3: Vitals Grid */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="pulse-outline" size={20} color="#EF4444" />
-            <Text style={styles.sectionTitle}>Patient Vitals</Text>
-          </View>
-
-          <View style={styles.grid}>
-            <View style={styles.gridItem}>
-              <Text style={styles.label}>BP (mmHg)</Text>
-              <TextInput style={styles.input} placeholder="120/80" value={bp} onChangeText={setBp} />
-            </View>
-            <View style={styles.gridItem}>
-              <Text style={styles.label}>Sugar (mg/dL)</Text>
-              <TextInput style={styles.input} placeholder="95" value={bloodSugar} onChangeText={setBloodSugar} />
-            </View>
-          </View>
-
-          <View style={styles.grid}>
-            <View style={styles.gridItem}>
-              <Text style={styles.label}>Temp (°C)</Text>
-              <TextInput style={styles.input} placeholder="36.5" value={temperature} onChangeText={setTemperature} />
-            </View>
-            <View style={styles.gridItem}>
-              <Text style={styles.label}>Pulse (bpm)</Text>
-              <TextInput style={styles.input} placeholder="72" value={pulse} onChangeText={setPulse} />
-            </View>
-          </View>
-        </View>
-
-        {/* Section 4: Observations */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={20} color="#2563EB" />
-            <Text style={styles.sectionTitle}>Metrics & Observations</Text>
-          </View>
-          
-          <Text style={styles.label}>Clinical Metrics</Text>
+        {/* CARD 4: OBSERVATIONS */}
+        <View style={[styles.card, !patientDetails && styles.disabledCard]}>
+          <Text style={styles.cardLabel}>FINDINGS & REMARKS</Text>
           <TextInput 
-            style={[styles.input, styles.textArea]} 
-            placeholder="Detailed measurements..." 
+            style={[styles.flatInput, styles.textArea]} 
+            placeholder="Detailed clinical metrics..." 
             multiline 
-            numberOfLines={3} 
             value={metrics} 
             onChangeText={setMetrics} 
+            editable={!!patientDetails}
           />
-
-          <Text style={styles.label}>Remarks</Text>
           <TextInput 
-            style={[styles.input, styles.textArea]} 
-            placeholder="Additional notes..." 
+            style={[styles.flatInput, styles.textArea, { marginTop: 12 }]} 
+            placeholder="Additional doctor remarks..." 
             multiline 
-            numberOfLines={2} 
             value={remarks} 
             onChangeText={setRemarks} 
+            editable={!!patientDetails}
           />
         </View>
 
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSaveLabRecord}>
+        <TouchableOpacity 
+          style={[styles.submitBtn, !patientDetails && styles.btnDisabled]} 
+          onPress={handleSaveLabRecord}
+          disabled={!patientDetails}
+        >
           <Text style={styles.submitText}>Complete Lab Record</Text>
+          <MaterialCommunityIcons name="file-send-outline" size={22} color="#fff" />
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
+// --- Helper Components ---
+const VitalGauge = ({ icon, label, unit, color, value, setter, placeholder }: any) => (
+  <View style={styles.gaugeContainer}>
+    <View style={styles.gaugeHeader}>
+      <MaterialCommunityIcons name={icon} size={16} color={color} />
+      <Text style={styles.gaugeLabel}>{label} ({unit})</Text>
+    </View>
+    <TextInput
+      style={styles.gaugeInput}
+      placeholder={placeholder}
+      keyboardType="numeric"
+      value={value}
+      onChangeText={setter}
+      placeholderTextColor="#CBD5E1"
+    />
+  </View>
+);
+
+// --- Stylesheet ---
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC", paddingHorizontal: 20 },
-  header: { marginTop: 24, marginBottom: 20 },
-  title: { fontSize: 28, fontWeight: "800", color: "#1E293B" },
-  subtitle: { fontSize: 14, color: "#64748B", marginTop: 4 },
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  header: { paddingTop: 60, paddingHorizontal: 25, paddingBottom: 20 },
+  headerTitle: { fontSize: 26, fontWeight: "800", color: COLORS.textMain },
+  headerSub: { fontSize: 14, color: COLORS.textSub, marginTop: 4 },
   
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
+  scrollBody: { paddingHorizontal: 20, paddingBottom: 40 },
+  
+  card: { 
+    backgroundColor: COLORS.white, 
+    borderRadius: 24, 
+    padding: 20, 
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#000",
-    shadowOpacity: 0.03,
+    elevation: 4,
+    shadowColor: "#64748B",
+    shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 2,
   },
+  disabledCard: { opacity: 0.5 },
+  cardLabel: { fontSize: 11, fontWeight: "800", color: COLORS.textSub, letterSpacing: 1, marginBottom: 15 },
 
-  sectionHeader: { flexDirection: "row", alignItems: "center", marginBottom: 16, gap: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#334155" },
-
-  label: { fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 6, marginLeft: 2 },
-  input: {
-    backgroundColor: "#F1F5F9",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 14 : 10,
-    fontSize: 15,
-    color: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+  searchRow: { flexDirection: "row", gap: 10 },
+  inputWrapper: { 
+    flex: 1, 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: COLORS.accent, 
+    borderRadius: 16,
   },
-  textArea: { textAlignVertical: "top", minHeight: 80 },
-
-  searchRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  searchBtn: {
-    backgroundColor: "#2563EB",
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    justifyContent: "center",
+  fieldIcon: { paddingLeft: 15 },
+  inputWithIcon: { flex: 1, height: 50, paddingHorizontal: 12, fontWeight: "600", color: COLORS.textMain },
+  searchBtn: { 
+    width: 50, 
+    height: 50, 
+    backgroundColor: COLORS.primary, 
+    borderRadius: 16, 
+    justifyContent: "center", 
     alignItems: "center",
+    elevation: 4,
   },
 
-  patientInfoBox: {
-    backgroundColor: "#F0FDF4",
-    padding: 12,
-    borderRadius: 10,
+  patientProfile: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: "#F0FDF4", 
+    padding: 15, 
+    borderRadius: 20, 
+    marginTop: 15,
     borderWidth: 1,
     borderColor: "#DCFCE7",
   },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  patientNameText: { fontSize: 16, fontWeight: "700", color: "#166534" },
-  patientSubText: { fontSize: 12, color: "#15803D", marginTop: 4, marginLeft: 28 },
+  avatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: COLORS.success, justifyContent: "center", alignItems: "center", marginRight: 12 },
+  avatarText: { color: "#fff", fontWeight: "bold", fontSize: 18 },
+  pName: { fontSize: 16, fontWeight: "700", color: "#166534" },
+  pSub: { fontSize: 12, color: "#15803D", marginTop: 2 },
+  verifiedTag: { marginLeft: "auto" },
 
-  grid: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  gridItem: { flex: 1 },
+  grid: { flexDirection: "row", gap: 12 },
+  gaugeContainer: { flex: 1, backgroundColor: COLORS.accent, padding: 12, borderRadius: 18, borderBottomWidth: 3, borderBottomColor: COLORS.border },
+  gaugeHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  gaugeLabel: { fontSize: 11, fontWeight: "700", color: COLORS.textSub },
+  gaugeInput: { fontSize: 18, fontWeight: "bold", color: COLORS.textMain, padding: 0 },
 
-  submitBtn: {
-    backgroundColor: "#2563EB",
-    paddingVertical: 18,
-    borderRadius: 12,
-    alignItems: "center",
-    margin: 10,
-    shadowColor: "#2563EB",
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+  fieldLabel: { fontSize: 13, fontWeight: "700", color: COLORS.textMain, marginTop: 15, marginBottom: 8 },
+  flatInput: { backgroundColor: COLORS.accent, borderRadius: 14, height: 50, paddingHorizontal: 15, fontWeight: "600", color: COLORS.textMain },
+  textArea: { height: 80, paddingTop: 15, textAlignVertical: "top" },
+
+  submitBtn: { 
+    backgroundColor: COLORS.primary, 
+    height: 60, 
+    borderRadius: 22, 
+    flexDirection: "row", 
+    justifyContent: "center", 
+    alignItems: "center", 
+    marginTop: 10,
+    gap: 12,
+    elevation: 8,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
-  submitText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  btnDisabled: { backgroundColor: COLORS.textSub, elevation: 0 },
+  submitText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
 });
 
 export default LabManagementScreen;

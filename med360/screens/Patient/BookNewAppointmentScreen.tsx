@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,212 +7,52 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  FlatList,
+  Platform,
+  KeyboardAvoidingView,
+  ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import SERVER_URL from "../../config";
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useNavigation } from "@react-navigation/native";
+import SERVER_URL from "../../config";
 
-// --- THEME COLORS ---
+// UI Theme Constants
 const PRIMARY_TEAL = "#00A896";
-const COMPLEMENT_YELLOW = "#96A800";
 const PRIMARY_DARK = "#0F172A";
-const LIGHT_BACKGROUND = "#F4F6F8";
-const NEUTRAL_LIGHT = "#FFFFFF";
-const HEADER_TEXT_LIGHT = "#CCF8FF";
-const BORDER_LIGHT = "#E2E8F0";
+const LIGHT_BG = "#F8FAFC";
+const BORDER_COLOR = "#E2E8F0";
+const SLATE_GRAY = "#64748B";
 
-// --- Types ---
 type Doctor = {
   id: string;
   name: string;
   specialty: string;
-  contact: string;
-  status: string;
-  timeSlots: string[];
+  startTime?: string;
+  endTime?: string;
 };
 
-type TimeSlot = {
-  id: string;
-  time: string; // Expected format: "09:00 AM" or "14:00"
-  available: boolean;
-};
-
-// --- Specialties ---
 const specialties = ["All", "Cardiology", "Dermatology", "Neurology", "Pediatrics"];
 
-// --- Helpers ---
-const getCalendarDays = (monthIndex: number, year: number): (number | null)[] => {
-  const firstDayOfMonth = new Date(year, monthIndex, 1).getDay();
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const days: (number | null)[] = Array(firstDayOfMonth).fill(null);
-  for (let i = 1; i <= daysInMonth; i++) days.push(i);
-  while (days.length % 7 !== 0) days.push(null);
-  return days;
-};
-
-const getDayLabel = (date: Date) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()];
-
-const getRelativeDayLabel = (date: Date) => {
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  if (date.toDateString() === today.toDateString()) return "Today";
-  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-  return getDayLabel(date);
-};
-
-/**
- * Converts time string (e.g., "09:30 AM" or "14:00") to minutes from midnight
- */
-const timeToMinutes = (timeStr: string): number => {
-  const [time, modifier] = timeStr.split(" ");
-  let [hours, minutes] = time.split(":").map(Number);
-
-  if (modifier === "PM" && hours < 12) hours += 12;
-  if (modifier === "AM" && hours === 12) hours = 0;
-
-  return hours * 60 + minutes;
-};
-
-// --- Components ---
-const DoctorListItem: React.FC<{ doctor: Doctor; selected: boolean; onSelect: () => void }> = ({
-  doctor,
-  selected,
-  onSelect,
-}) => (
-  <TouchableOpacity
-    style={[styles.doctorListItem, selected && styles.doctorListItemSelected]}
-    onPress={onSelect}
-    activeOpacity={0.8}
-  >
-    <View style={styles.listItemTextContainer}>
-      <Text style={[styles.listItemName, selected && { color: NEUTRAL_LIGHT }]}>{doctor.name}</Text>
-      <Text style={[styles.listItemDetails, selected && { color: HEADER_TEXT_LIGHT }]}>{doctor.specialty}</Text>
-    </View>
-    <Ionicons
-      name={selected ? "checkmark-circle" : "chevron-forward-outline"}
-      size={20}
-      color={selected ? NEUTRAL_LIGHT : PRIMARY_TEAL}
-    />
-  </TouchableOpacity>
-);
-
-const LegendItem: React.FC<{ colorStyle: object; text: string }> = ({ colorStyle, text }) => (
-  <View style={styles.legendItem}>
-    <View style={[styles.legendColorBox, colorStyle]} />
-    <Text style={styles.legendText}>{text}</Text>
-  </View>
-);
-
-const DateScroller: React.FC<{
-  selectedDate: number | null;
-  selectedMonth: number;
-  onDateSelect: (day: number, month: number) => void;
-}> = ({ selectedDate, selectedMonth, onDateSelect }) => {
-  const today = new Date();
-  const dates = useMemo(() => {
-    const list = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      list.push(date);
-    }
-    return list;
-  }, []);
-
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateScrollerContent}>
-      {dates.map((date) => {
-        const day = date.getDate();
-        const month = date.getMonth();
-        const isSelected = selectedDate === day && selectedMonth === month;
-        return (
-          <TouchableOpacity
-            key={date.toISOString()}
-            style={[styles.scrollerDayButton, isSelected && styles.scrollerDayButtonSelected]}
-            onPress={() => onDateSelect(day, month)}
-          >
-            <Text style={[styles.scrollerDayText, isSelected && styles.scrollerDayTextSelected]}>
-              {getRelativeDayLabel(date)}
-            </Text>
-            <Text style={[styles.scrollerDateText, isSelected && styles.scrollerDayTextSelected]}>{day}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  );
-};
-
-const MonthCalendar: React.FC<{
-  selectedDate: number | null;
-  selectedMonth: number;
-  onDateSelect: (day: number, month: number) => void;
-  onMonthChange: (month: number) => void;
-}> = ({ selectedDate, selectedMonth, onDateSelect, onMonthChange }) => {
-  const daysOfWeek = ["S", "M", "T", "W", "T", "F", "S"];
-  const currentDate = new Date();
-  const calendarYear = currentDate.getFullYear();
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-  const renderCalendar = (month: number) => (
-    <View style={styles.calendarColumn}>
-      <View style={styles.calendarHeader}>
-        <TouchableOpacity onPress={() => onMonthChange((month - 1 + 12) % 12)}>
-          <Ionicons name="chevron-back" size={20} color={PRIMARY_TEAL} />
-        </TouchableOpacity>
-        <Text style={styles.calendarMonthTitle}>{monthNames[month]} {calendarYear}</Text>
-        <TouchableOpacity onPress={() => onMonthChange((month + 1) % 12)}>
-          <Ionicons name="chevron-forward" size={20} color={PRIMARY_TEAL} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.weekRow}>
-        {daysOfWeek.map((day, idx) => <Text key={idx} style={styles.dayOfWeekText}>{day}</Text>)}
-      </View>
-      <View style={styles.calendarGrid}>
-        {getCalendarDays(month, calendarYear).map((day, idx) => {
-          const isSelected = selectedDate === day && selectedMonth === month;
-          const isPast = day !== null && new Date(calendarYear, month, day).getTime() < new Date().setHours(0, 0, 0, 0);
-          return (
-            <TouchableOpacity
-              key={`${month}-${day ?? "empty"}-${idx}`}
-              style={[styles.dateCell, day === null && styles.dateCellEmpty, isSelected && styles.dateCellSelected, isPast && styles.dateCellDisabled]}
-              onPress={() => day && onDateSelect(day, month)}
-              disabled={isPast || day === null}
-            >
-              <Text style={[styles.dateText, isSelected && styles.dateTextSelected, isPast && styles.dateTextDisabled]}>{day}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={styles.calendarWrapper}>
-      {renderCalendar(selectedMonth)}
-    </View>
-  );
-};
-
-// --- Main Screen ---
 const BookNewAppointmentScreen: React.FC = () => {
   const navigation = useNavigation();
 
+  // Data & Loading
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-  const [selectedSpecialty, setSelectedSpecialty] = useState("All");
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [loadingDocs, setLoadingDocs] = useState(true);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   
-  const now = new Date();
-  const [selectedDay, setSelectedDay] = useState<number | null>(now.getDate());
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  // Selections
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [selectedSpecialty, setSelectedSpecialty] = useState("All");
+  const [date, setDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(Platform.OS === "ios");
+
+  // Availability & Registration
+  const [filled, setFilled] = useState(0);
+  const [remaining, setRemaining] = useState(25);
   const [reason, setReason] = useState("");
   const [mobilenumber, setMobileNumber] = useState("");
-  const [showFullCalendar, setShowFullCalendar] = useState(false);
-  const [loadingSlots, setLoadingSlots] = useState(false);
   const [patientId, setPatientId] = useState<string | null>(null);
 
   const availableDoctors = selectedSpecialty === "All"
@@ -221,617 +61,268 @@ const BookNewAppointmentScreen: React.FC = () => {
 
   useEffect(() => {
     AsyncStorage.getItem("PATIENT_ID").then((id) => setPatientId(id));
-  }, []);
-
-  // Fetch doctors
-  useEffect(() => {
-    const fetchDoctors = async () => {
-      try {
-        const response = await fetch(`${SERVER_URL}/doctors/`);
-        const data = await response.json();
-        if (!response.ok) return;
-
-        const mapped: Doctor[] = data.map((doc: any) => ({
-          id: doc.id || "N/A",
-          name: (doc.name || "Unknown").trim(),
-          specialty: (doc.specialty || "General").trim(),
-          contact: (doc.contact || "N/A").trim(),
-          status: (doc.status || "Inactive").trim(),
-          timeSlots: doc.timeSlots || [],
-        }));
-        setDoctors(mapped);
-      } catch (err) {
-        console.error(err);
-      }
-    };
     fetchDoctors();
   }, []);
 
-  // Fetch and Filter Time Slots
+  // Triggered whenever Doctor or Date changes
   useEffect(() => {
-    const fetchTimeSlots = async () => {
-      if (!selectedDoctor || !selectedDay) {
-        setTimeSlots([]);
-        return;
-      }
+    if (selectedDoctor) {
+      fetchStatus();
+    }
+  }, [selectedDoctor, date]);
 
-      try {
-        setLoadingSlots(true);
-        const dateObj = new Date(now.getFullYear(), selectedMonth, selectedDay);
-        const dateStr = dateObj.toISOString().split("T")[0];
-
-        const response = await fetch(`${SERVER_URL}/appointments/timeslots?doctor_id=${selectedDoctor.id}&date=${dateStr}`);
-        if (!response.ok) throw new Error("Failed");
-
-        const data: TimeSlot[] = await response.json();
-
-        // --- FILTER LOGIC ---
-        const isToday = dateObj.toDateString() === now.toDateString();
-        
-        if (isToday) {
-          const currentMinutes = now.getHours() * 60 + now.getMinutes();
-          // Only show slots that are at least 15 minutes in the future
-          const filtered = data.filter(slot => timeToMinutes(slot.time) > currentMinutes + 15);
-          setTimeSlots(filtered);
-        } else {
-          setTimeSlots(data);
-        }
-      } catch (error) {
-        setTimeSlots([]);
-      } finally {
-        setLoadingSlots(false);
-      }
-    };
-
-    fetchTimeSlots();
-  }, [selectedDoctor, selectedDay, selectedMonth]);
-
-const handleBooking = () => {
-  if (!selectedDoctor || !selectedSlot || !selectedDay || !reason.trim() || !patientId || !mobilenumber) {
-    Alert.alert("Missing Details", "Please select all fields");
-    return;
-  }
-
-  const year = now.getFullYear();
-  const month = String(selectedMonth + 1).padStart(2, "0");
-  const day = String(selectedDay).padStart(2, "0");
-
-  const appointmentData = {
-    patient_id: patientId,
-    doctor_id: selectedDoctor.id,
-    date: `${year}-${month}-${day}`,
-    time: selectedSlot.time,
-    reason: reason.trim(),
-    mobilenumber,
-    status: "Pending",
+  const fetchDoctors = async () => {
+    try {
+      setLoadingDocs(true);
+      const res = await fetch(`${SERVER_URL}/doctors/`);
+      const data = await res.json();
+      
+      // Map data and ensure time strings exist (Fallback to 12PM-5PM if missing)
+      const mapped = data.map((d: any) => ({
+        ...d,
+        startTime: d.startTime || "12:00 PM",
+        endTime: d.endTime || "05:00 PM"
+      }));
+      setDoctors(mapped);
+    } catch (err) {
+      Alert.alert("Error", "Could not load doctors.");
+    } finally {
+      setLoadingDocs(false);
+    }
   };
 
+  const fetchStatus = async () => {
+    setLoadingSlots(true);
+    const dateStr = date.toISOString().split("T")[0];
+    try {
+      const res = await fetch(
+        `${SERVER_URL}/appointments/doctor/${selectedDoctor?.id}/registrations?date=${dateStr}`
+      );
+      const data = await res.json();
+      setFilled(data.filled || 0);
+      setRemaining(data.remaining || 25);
+    } catch (err) {
+      console.log("Error fetching tokens:", err);
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
 
-  fetch(`${SERVER_URL}/appointments/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(appointmentData),
-  })
-    .then(async (res) => {
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") setShowPicker(false);
+    if (selectedDate) setDate(selectedDate);
+  };
+
+  const handleBooking = async () => {
+    if (!selectedDoctor || !reason || !mobilenumber) {
+      Alert.alert("Required", "Please complete all fields.");
+      return;
+    }
+
+    const appointmentData = {
+      patient_id: patientId,
+      doctor_id: selectedDoctor.id,
+      date: date.toISOString().split("T")[0],
+      reason,
+      mobilenumber,
+      status: "Pending",
+    };
+
+    try {
+      const res = await fetch(`${SERVER_URL}/appointments/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(appointmentData),
+      });
+
       if (res.ok) {
-        Alert.alert(
-          "Success",
-          "Appointment booked successfully",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                setSelectedSlot(null);
-                setReason("");
-                navigation.goBack(); // ✅ AUTO BACK
-              },
-            },
-          ],
-          { cancelable: false }
-        );
+        Alert.alert("Success", "Appointment Request Submitted", [
+          { text: "View Bookings", onPress: () => navigation.goBack() }
+        ]);
       } else {
         const data = await res.json();
-        Alert.alert("Error", data.detail || "Failed to book");
+        Alert.alert("Booking Error", data.detail || "Unable to book.");
       }
-    })
-    .catch(() => Alert.alert("Error", "Server error"));
-};
+    } catch {
+      Alert.alert("Server Error", "Please try again later.");
+    }
+  };
 
   return (
-    <View style={styles.screenContainer}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Book Appointment</Text>
-      </View>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* 1. Specialty */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>1. Choose Specialty</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {specialties.map((spec) => (
-              <TouchableOpacity
-                key={spec}
-                style={[styles.specialtyButton, selectedSpecialty === spec && styles.specialtyButtonSelected]}
-                onPress={() => { setSelectedSpecialty(spec); setSelectedDoctor(null); setSelectedSlot(null); }}
-              >
-                <Text style={[styles.specialtyText, selectedSpecialty === spec && styles.specialtyTextSelected]}>{spec}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* 2. Doctor */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>2. Select Doctor</Text>
-          {availableDoctors.map(item => (
-            <DoctorListItem
-              key={item.id}
-              doctor={item}
-              selected={selectedDoctor?.id === item.id}
-              onSelect={() => { setSelectedDoctor(item); setSelectedSlot(null); }}
-            />
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* 1. Specialties */}
+        <Text style={styles.label}>1. Choose Specialty</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
+          {specialties.map((spec) => (
+            <TouchableOpacity
+              key={spec}
+              style={[styles.chip, selectedSpecialty === spec && styles.chipSelected]}
+              onPress={() => {
+                setSelectedSpecialty(spec);
+                setSelectedDoctor(null);
+              }}
+            >
+              <Text style={[styles.chipText, selectedSpecialty === spec && { color: "#fff" }]}>{spec}</Text>
+            </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
-        {/* 3. Date */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>3. Select Date</Text>
-          <DateScroller 
-             selectedDate={selectedDay} 
-             selectedMonth={selectedMonth} 
-             onDateSelect={(d, m) => { setSelectedDay(d); setSelectedMonth(m); setSelectedSlot(null); }} 
-          />
-        </View>
+        {/* 2. Doctor List */}
+        <Text style={styles.label}>2. Select Doctor</Text>
+        {loadingDocs ? <ActivityIndicator color={PRIMARY_TEAL} /> : availableDoctors.map((doc) => (
+          <TouchableOpacity
+            key={doc.id}
+            style={[styles.docCard, selectedDoctor?.id === doc.id && styles.docSelected]}
+            onPress={() => setSelectedDoctor(doc)}
+          >
+            <View style={styles.avatar}><Ionicons name="person" size={20} color={PRIMARY_TEAL} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.docName}>Dr. {doc.name}</Text>
+              <Text style={styles.docSub}>{doc.specialty}</Text>
+            </View>
+            {selectedDoctor?.id === doc.id && <Ionicons name="checkmark-circle" size={24} color={PRIMARY_TEAL} />}
+          </TouchableOpacity>
+        ))}
 
-        {/* 4. Time Slots */}
-        {selectedDoctor && selectedDay !== null && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>4. Available Time Slots</Text>
-            {loadingSlots ? (
-              <Text style={styles.infoText}>Checking availability...</Text>
-            ) : timeSlots.length === 0 ? (
-              <Text style={styles.infoText}>No remaining slots for today.</Text>
-            ) : (
-              <View style={styles.timeSlotGrid}>
-                {timeSlots.map((slot) => (
-                  <TouchableOpacity
-                    key={slot.id}
-                    style={[
-                      styles.timeSlotButton,
-                      !slot.available && styles.timeSlotButtonDisabled,
-                      selectedSlot?.id === slot.id && styles.timeSlotButtonSelected,
-                    ]}
-                    onPress={() => slot.available && setSelectedSlot(slot)}
-                    disabled={!slot.available}
-                  >
-                    <Text style={[styles.timeSlotText, (selectedSlot?.id === slot.id || !slot.available) && styles.timeSlotTextSelectedOrDisabled]}>
-                      {slot.time}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+        {/* 3. Schedule & Availability */}
+        <Text style={styles.label}>3. Date & Available Tokens</Text>
+        
+        {/* Consultation Time Card */}
+        {selectedDoctor && (
+          <View style={styles.timeBanner}>
+            <Ionicons name="time" size={20} color={PRIMARY_TEAL} />
+            <Text style={styles.timeText}>Consultation Time: </Text>
+            <Text style={styles.timeBold}>{selectedDoctor.startTime} - {selectedDoctor.endTime}</Text>
           </View>
         )}
 
-        {/* 5. Reason */}
-        <View style={styles.section}>
-           <Text style={styles.sectionTitle}>5. Reason</Text>
-           <TextInput
-              style={styles.reasonInput}
-              placeholder="Briefly describe your symptoms"
-              multiline
-              value={reason}
-              onChangeText={setReason}
+        {/* Calendar Selection */}
+        <View style={styles.calendarCard}>
+          {Platform.OS === "android" && (
+            <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowPicker(true)}>
+              <Ionicons name="calendar-outline" size={20} color={PRIMARY_TEAL} />
+              <Text style={styles.dateBtnText}>{date.toDateString()}</Text>
+              <Text style={styles.changeLink}>Change</Text>
+            </TouchableOpacity>
+          )}
+          {showPicker && (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "calendar"}
+              minimumDate={new Date()}
+              maximumDate={new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)}
+              onChange={onDateChange}
+              accentColor={PRIMARY_TEAL}
             />
+          )}
         </View>
 
-        <View style={styles.section}>
-           <Text style={styles.sectionTitle}>6. Mobile Number</Text>
-           <TextInput
-              style={styles.reasonInput}
-              placeholder="Mobile Number"
-              multiline
-              value={mobilenumber}
-              onChangeText={setMobileNumber}
-            />
-        </View>
+        {/* Tokens Available Visualizer */}
+        {selectedDoctor && (
+          <View style={styles.tokenContainer}>
+            <View style={styles.tokenHeader}>
+              <Text style={styles.tokenTitle}>Token Availability</Text>
+              <Text style={[styles.tokenCount, remaining < 5 && { color: "#EF4444" }]}>
+                {remaining} of 25 Available
+              </Text>
+            </View>
 
-        <TouchableOpacity
-          style={[styles.submitButton, (!selectedSlot || !reason.trim()) && styles.submitButtonDisabled]}
+            {loadingSlots ? <ActivityIndicator color={PRIMARY_TEAL} /> : (
+              <View style={styles.grid}>
+                {Array.from({ length: 25 }).map((_, i) => (
+                  <View 
+                    key={i} 
+                    style={[styles.dot, i < filled ? styles.dotFilled : styles.dotEmpty]} 
+                  />
+                ))}
+              </View>
+            )}
+            <Text style={styles.note}>Sequence tokens are assigned automatically upon booking.</Text>
+          </View>
+        )}
+
+        {/* 4. Details */}
+        <Text style={styles.label}>4. Patient Information</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Contact Number"
+          keyboardType="phone-pad"
+          value={mobilenumber}
+          onChangeText={setMobileNumber}
+        />
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Describe your health problem..."
+          multiline
+          value={reason}
+          onChangeText={setReason}
+        />
+
+        <TouchableOpacity 
+          style={[styles.bookBtn, (remaining <= 0 || !selectedDoctor) && styles.disabledBtn]} 
           onPress={handleBooking}
-          disabled={!selectedSlot || !reason.trim()}
+          disabled={remaining <= 0}
         >
-          <Text style={styles.submitButtonText}>Confirm Booking</Text>
+          <Text style={styles.bookBtnText}>
+            {remaining <= 0 ? "No Tokens Available" : "Confirm Appointment"}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
-export default BookNewAppointmentScreen;
-// --- Stylesheet (Updated) ---
-
 const styles = StyleSheet.create({
-  screenContainer: {
-    flex: 1,
-    backgroundColor: LIGHT_BACKGROUND,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
+  container: { flex: 1, backgroundColor: LIGHT_BG },
+  header: { padding: 20, paddingTop: 60, backgroundColor: PRIMARY_TEAL, flexDirection: "row", alignItems: "center" },
+  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "bold", marginLeft: 15 },
+  content: { padding: 20, paddingBottom: 60 },
+  label: { fontSize: 16, fontWeight: "700", color: PRIMARY_DARK, marginVertical: 12 },
+  
+  // Specialty Chips
+  row: { marginBottom: 10 },
+  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, backgroundColor: "#fff", marginRight: 10, borderWidth: 1, borderColor: BORDER_COLOR },
+  chipSelected: { backgroundColor: PRIMARY_TEAL, borderColor: PRIMARY_TEAL },
+  chipText: { fontSize: 14, color: SLATE_GRAY, fontWeight: "600" },
 
-  // --- Header (Unchanged) ---
-  header: {
-    padding: 20,
-    backgroundColor: PRIMARY_TEAL,
-    paddingTop: 50,
-    marginBottom: 10,
-    borderBottomLeftRadius: 15,
-    borderBottomRightRadius: 15,
-    elevation: 5,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: NEUTRAL_LIGHT,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: HEADER_TEXT_LIGHT,
-    marginTop: 5,
-  },
+  // Doctor Cards
+  docCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", padding: 15, borderRadius: 15, marginBottom: 10, borderWidth: 1, borderColor: BORDER_COLOR },
+  docSelected: { borderColor: PRIMARY_TEAL, backgroundColor: "#F0FDFA" },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#E6F6F4", alignItems: "center", justifyContent: "center", marginRight: 15 },
+  docName: { fontSize: 16, fontWeight: "bold", color: PRIMARY_DARK },
+  docSub: { fontSize: 13, color: SLATE_GRAY },
 
-  // --- Section (Unchanged) ---
-  section: {
-    marginBottom: 20,
-    backgroundColor: NEUTRAL_LIGHT,
-    padding: 15,
-    borderRadius: 12,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: PRIMARY_DARK,
-    marginBottom: 10,
-    marginTop: 5,
-  },
-  specialtyScroll: {
-    paddingBottom: 5,
-  },
-  specialtyButton: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 25,
-    marginRight: 10,
-    backgroundColor: NEUTRAL_LIGHT,
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
-  },
-  specialtyButtonSelected: {
-    backgroundColor: PRIMARY_TEAL,
-    borderColor: PRIMARY_TEAL,
-  },
-  specialtyText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: PRIMARY_DARK,
-  },
-  specialtyTextSelected: {
-    color: NEUTRAL_LIGHT,
-    fontWeight: '700',
-  },
-  doctorListContainer: {
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
-    borderRadius: 12,
-    backgroundColor: NEUTRAL_LIGHT,
-    overflow: 'hidden',
-  },
-  doctorListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: LIGHT_BACKGROUND,
-  },
-  doctorListItemSelected: {
-    backgroundColor: PRIMARY_TEAL,
-  },
-  listItemTextContainer: {
-    flex: 1,
-  },
-  listItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: PRIMARY_DARK,
-  },
-  listItemDetails: {
-    fontSize: 12,
-    color: PRIMARY_DARK,
-    marginTop: 2,
-  },
-  noDoctorsText: {
-    padding: 15,
-    fontSize: 14,
-    color: PRIMARY_DARK,
-    textAlign: 'center',
-  },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: PRIMARY_TEAL + '10',
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: PRIMARY_TEAL,
-  },
-  profileInfo: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: PRIMARY_TEAL,
-  },
-  profileDesignation: {
-    fontSize: 14,
-    color: PRIMARY_DARK,
-  },
-  profileExperience: {
-    fontSize: 12,
-    color: PRIMARY_DARK,
-  },
+  // Consultation Time
+  timeBanner: { flexDirection: "row", alignItems: "center", backgroundColor: "#E6F6F4", padding: 12, borderRadius: 12, marginBottom: 10 },
+  timeText: { marginLeft: 8, fontSize: 14, color: SLATE_GRAY },
+  timeBold: { fontSize: 14, fontWeight: "bold", color: PRIMARY_TEAL },
 
-  // --- Date Scroller Styles (New) ---
-  dateScrollerContent: {
-    paddingVertical: 5,
-  },
-  scrollerDayButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-    backgroundColor: LIGHT_BACKGROUND,
-  },
-  scrollerDayButtonTodayTomorrow: {
-    borderColor: COMPLEMENT_YELLOW, // Highlight Today/Tomorrow slightly
-    backgroundColor: COMPLEMENT_YELLOW + '10',
-  },
-  scrollerDayButtonSelected: {
-    backgroundColor: PRIMARY_TEAL,
-    borderColor: PRIMARY_TEAL,
-  },
-  scrollerDayText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  scrollerDateText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  scrollerDayTextDefault: {
-    color: PRIMARY_DARK,
-  },
-  scrollerDayTextSelected: {
-    color: NEUTRAL_LIGHT,
-  },
+  // Calendar
+  calendarCard: { backgroundColor: "#fff", borderRadius: 15, padding: 10, marginBottom: 15, borderWidth: 1, borderColor: BORDER_COLOR },
+  datePickerBtn: { flexDirection: "row", alignItems: "center", padding: 10 },
+  dateBtnText: { flex: 1, marginLeft: 10, fontSize: 16, color: PRIMARY_DARK },
+  changeLink: { color: PRIMARY_TEAL, fontWeight: "bold" },
 
-  // --- Calendar Toggle ---
-  calendarToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    paddingVertical: 5,
-  },
-  calendarToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: PRIMARY_TEAL,
-    marginRight: 5,
-  },
+  // Token Visualizer
+  tokenContainer: { backgroundColor: "#fff", padding: 15, borderRadius: 15, borderWidth: 1, borderColor: BORDER_COLOR, marginBottom: 20 },
+  tokenHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 15 },
+  tokenTitle: { fontWeight: "bold", color: PRIMARY_DARK },
+  tokenCount: { fontWeight: "bold", color: PRIMARY_TEAL },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 12 },
+  dot: { width: 14, height: 14, borderRadius: 7 },
+  dotFilled: { backgroundColor: "#E2E8F0" },
+  dotEmpty: { backgroundColor: PRIMARY_TEAL },
+  note: { fontSize: 11, color: SLATE_GRAY, fontStyle: "italic" },
 
-  // --- Month Calendar (Updated styles) ---
-  calendarWrapper: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
-    overflow: 'hidden',
-  },
-  monthCalendarContainer: {
-    backgroundColor: NEUTRAL_LIGHT,
-    padding: 10,
-  },
-  calendarColumn: {
-    // Main container
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-    paddingHorizontal: 10,
-  },
-  calendarMonthTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: PRIMARY_DARK,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 8,
-  },
-  dayOfWeekText: {
-    width: '12%',
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: PRIMARY_DARK,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-  },
-  dateCell: {
-    width: '12%',
-    aspectRatio: 1,
-    margin: '1%',
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: NEUTRAL_LIGHT,
-  },
-  dateCellEmpty: {
-    width: '12%',
-    aspectRatio: 1,
-    margin: '1%',
-    borderRadius: 6,
-  },
-  dateCellAvailable: {
-    borderColor: PRIMARY_TEAL + '50',
-    backgroundColor: PRIMARY_TEAL + '10',
-  },
-  dateCellToday: {
-    borderColor: COMPLEMENT_YELLOW,
-    backgroundColor: COMPLEMENT_YELLOW + '10',
-  },
-  dateCellDisabled: {
-    borderColor: BORDER_LIGHT,
-    backgroundColor: LIGHT_BACKGROUND,
-    opacity: 0.5,
-  },
-  dateCellSelected: {
-    backgroundColor: PRIMARY_TEAL,
-    borderColor: PRIMARY_TEAL,
-  },
-  dateText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: PRIMARY_DARK,
-  },
-  dateTextAvailable: {
-    color: PRIMARY_TEAL,
-  },
-  dateTextToday: {
-    color: PRIMARY_DARK,
-  },
-  dateTextDisabled: {
-    color: '#A1A1AA', // Darker gray for disabled
-  },
-  dateTextSelected: {
-    color: NEUTRAL_LIGHT,
-  },
-
-  // --- Legend Styles (Unchanged) ---
-  legendContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    padding: 10,
-    backgroundColor: LIGHT_BACKGROUND,
-    borderTopWidth: 1,
-    borderColor: BORDER_LIGHT,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 4,
-    marginVertical: 4,
-  },
-  legendColorBox: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-    marginRight: 6,
-    borderWidth: 1,
-  },
-  legendText: {
-    fontSize: 12,
-    color: PRIMARY_DARK,
-  },
-
-  // --- Time Slots (Unchanged) ---
-  timeSlotGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    marginTop: 5,
-  },
-  timeSlotButton: {
-    backgroundColor: NEUTRAL_LIGHT,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    marginRight: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
-  },
-  timeSlotButtonSelected: {
-    backgroundColor: PRIMARY_TEAL,
-    borderColor: PRIMARY_TEAL,
-  },
-  timeSlotButtonDisabled: {
-    backgroundColor: LIGHT_BACKGROUND,
-    borderColor: BORDER_LIGHT,
-    opacity: 0.6,
-  },
-  timeSlotText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  timeSlotTextDefault: {
-    color: PRIMARY_DARK,
-  },
-  timeSlotTextSelectedOrDisabled: {
-    color: NEUTRAL_LIGHT,
-  },
-
-  // --- Reason Input and Submit Button (Unchanged) ---
-  reasonInput: {
-    backgroundColor: NEUTRAL_LIGHT,
-    borderRadius: 10,
-    padding: 15,
-    textAlignVertical: 'top',
-    fontSize: 15,
-    minHeight: 100,
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
-  },
-  submitButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderRadius: 12,
-    backgroundColor: PRIMARY_TEAL,
-    elevation: 5,
-    marginTop: 10,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#A1A1AA',
-  },
-  submitButtonText: {
-    color: NEUTRAL_LIGHT,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  infoText: { textAlign: "center", color: "#64748B", marginVertical: 10 }
+  // Form & Button
+  input: { backgroundColor: "#fff", padding: 15, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: BORDER_COLOR, fontSize: 16 },
+  textArea: { height: 100, textAlignVertical: "top" },
+  bookBtn: { backgroundColor: PRIMARY_TEAL, padding: 18, borderRadius: 15, alignItems: "center", marginTop: 10 },
+  disabledBtn: { backgroundColor: "#CBD5E1" },
+  bookBtnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
 });
+
+export default BookNewAppointmentScreen;

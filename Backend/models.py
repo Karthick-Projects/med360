@@ -8,10 +8,11 @@ class LoginModel(BaseModel):
 
 class RegisterRequest(BaseModel):
     name: str
-    dob: str
+    age: int      # match the frontend numeric keyboard
+    gender: str
+    address: str
     phone: str
     password: str
-    confirmPassword: str
 
 class Doctor(BaseModel):
     id: str
@@ -30,10 +31,10 @@ class CreateAppointmentModel(BaseModel):
     patient_id: str
     doctor_id: str
     date: str
-    time: str
     reason: str
     mobilenumber: str
-    status: str
+    status: str = "Pending"
+    is_emergency: bool = False  # <--- CRITICAL: Add this line
 
 class UserMasterCreate(BaseModel):
     userType: str
@@ -70,7 +71,6 @@ class PatientResponse(BaseModel):
 
 class AdmissionCreate(BaseModel):
     patientId: str
-    admissionType: str
     ward: str
     bedNumber: str
 
@@ -176,3 +176,21 @@ class VitalsCreate(BaseModel):
     spo2: Optional[int] = None
     respiration_rate: Optional[int] = None
     blood_sugar: Optional[int] = None
+
+
+class DischargeUpdate(BaseModel):
+    discharge_date: str  # Format: YYYY-MM-DD
+
+# This represents the structure stored in your 'appointments' or 'admissions' collection
+class InPatientModel(BaseModel):
+    patient_name: str
+    age: int
+    gender: str
+    doctor_id: str
+    ward_no: str
+    bed_no: str
+    admission_date: str
+    reason: str
+    is_ipd: bool = True
+    discharge_date: Optional[str] = None
+    status: str = "Admitted" # Admitted, Discharged

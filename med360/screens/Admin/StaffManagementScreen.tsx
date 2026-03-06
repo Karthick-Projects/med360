@@ -7,33 +7,37 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons"; // for eye icon
-import SERVER_URL from "../../config"; // your server URL
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from "@expo/vector-icons";
+import SERVER_URL from "../../config";
+
+const COLORS = {
+  primary: "#2563eb",
+  bg: "#F8FAFC",
+  white: "#FFFFFF",
+  textMain: "#1E293B",
+  textSub: "#64748B",
+  border: "#E2E8F0",
+  accent: "#EEF2FF",
+};
 
 const StaffRegistrationScreen = () => {
   const [staffId, setStaffId] = useState("");
   const [staffName, setStaffName] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState("");
+  const [role, setRole] = useState("Nurse");
   const [department, setDepartment] = useState("");
-  const [shift, setShift] = useState("");
+  const [shift, setShift] = useState("Morning");
   const [contactNumber, setContactNumber] = useState("");
-  const [availability, setAvailability] = useState("");
+  const [availability, setAvailability] = useState("Available");
 
-  /* Validation & Save */
   const handleSaveStaff = async () => {
-    if (
-      !staffId ||
-      !staffName ||
-      !password ||
-      !role ||
-      !department ||
-      !shift ||
-      !contactNumber
-    ) {
-      Alert.alert("Validation Error", "Please fill all required fields");
+    if (!staffId || !staffName || !password || !department || !contactNumber) {
+      Alert.alert("Required Fields", "Please complete all fields marked with *");
       return;
     }
 
@@ -54,131 +58,201 @@ const StaffRegistrationScreen = () => {
       });
 
       const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Registration failed");
 
-      if (!response.ok) {
-        Alert.alert("Error", data.detail || "Failed to register staff");
-        return;
-      }
-
-      Alert.alert("Success", `Staff registered successfully\nID: ${data.staffId}`);
-
-      // Reset form
-      setStaffId("");
-      setStaffName("");
-      setPassword("");
-      setRole("");
-      setDepartment("");
-      setShift("");
-      setContactNumber("");
-      setAvailability("");
-      setShowPassword(false);
-
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Network Error", "Unable to register staff");
+      Alert.alert("Success", `Staff ID ${data.staffId} registered successfully`);
+      resetForm();
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
     }
   };
 
+  const resetForm = () => {
+    setStaffId(""); setStaffName(""); setPassword("");
+    setDepartment(""); setContactNumber("");
+    setShowPassword(false);
+  };
+
+  const SelectableChip = ({ label, current, setter }: any) => (
+    <TouchableOpacity 
+      onPress={() => setter(label)}
+      style={[styles.chip, current === label && styles.chipActive]}
+    >
+      <Text style={[styles.chipText, current === label && styles.chipTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Staff Registration</Text>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === "ios" ? "padding" : "height"} 
+      style={styles.container}
+    >
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Add New Staff</Text>
+        <Text style={styles.headerSub}>Create professional credentials</Text>
+      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Staff ID *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter Staff ID"
-          value={staffId}
-          onChangeText={setStaffId}
-        />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        
+        {/* CARD 1: ACCOUNT DETAILS */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="key-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Account Security</Text>
+          </View>
 
-        <Text style={styles.label}>Staff Name *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Full name"
-          value={staffName}
-          onChangeText={setStaffName}
-        />
+          <Text style={styles.label}>Staff ID *</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="id-card-outline" size={18} color={COLORS.textSub} style={styles.inputIcon} />
+            <TextInput 
+              style={styles.input} 
+              placeholder="e.g. STF-990" 
+              value={staffId} 
+              onChangeText={setStaffId} 
+            />
+          </View>
 
-        <Text style={styles.label}>Password *</Text>
-        <View style={styles.passwordWrapper}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Enter password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Text style={styles.eyeIcon}>
-              {showPassword ? "🙉" : "🙈"}
-            </Text>
-          </TouchableOpacity>
+          <Text style={styles.label}>Password *</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="lock-closed-outline" size={18} color={COLORS.textSub} style={styles.inputIcon} />
+            <TextInput 
+              style={[styles.input, { flex: 1 }]} 
+              placeholder="Min 6 characters" 
+              value={password} 
+              onChangeText={setPassword} 
+              secureTextEntry={!showPassword} 
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <Text style={styles.label}>Role *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Doctor / Nurse / Technician / Admin"
-          value={role}
-          onChangeText={setRole}
-        />
+        {/* CARD 2: PROFESSIONAL INFO */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <FontAwesome5 name="user-tie" size={18} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Professional Profile</Text>
+          </View>
 
-        <Text style={styles.label}>Department *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Assigned department"
-          value={department}
-          onChangeText={setDepartment}
-        />
+          <Text style={styles.label}>Full Name *</Text>
+          <TextInput 
+            style={styles.simpleInput} 
+            placeholder="John Doe" 
+            value={staffName} 
+            onChangeText={setStaffName} 
+          />
 
-        <Text style={styles.label}>Shift *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Morning / Evening / Night"
-          value={shift}
-          onChangeText={setShift}
-        />
+          <Text style={styles.label}>Role *</Text>
+          <View style={styles.chipGroup}>
+            {["Doctor", "Nurse", "Technician", "Admin"].map(r => (
+              <SelectableChip key={r} label={r} current={role} setter={setRole} />
+            ))}
+          </View>
 
-        <Text style={styles.label}>Contact Number *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Phone number"
-          keyboardType="phone-pad"
-          value={contactNumber}
-          onChangeText={setContactNumber}
-        />
+          <Text style={styles.label}>Department *</Text>
+          <TextInput 
+            style={styles.simpleInput} 
+            placeholder="e.g. Radiology" 
+            value={department} 
+            onChangeText={setDepartment} 
+          />
+        </View>
 
-        <Text style={styles.label}>Availability</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Available / On Leave"
-          value={availability}
-          onChangeText={setAvailability}
-        />
+        {/* CARD 3: OPERATIONS */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <MaterialCommunityIcons name="calendar-clock" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Shift & Contact</Text>
+          </View>
+
+          <Text style={styles.label}>Assigned Shift *</Text>
+          <View style={styles.chipGroup}>
+            {["Morning", "Evening", "Night"].map(s => (
+              <SelectableChip key={s} label={s} current={shift} setter={setShift} />
+            ))}
+          </View>
+
+          <Text style={styles.label}>Contact Number *</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="call-outline" size={18} color={COLORS.textSub} style={styles.inputIcon} />
+            <TextInput 
+              style={styles.input} 
+              placeholder="+1 234 567 890" 
+              keyboardType="phone-pad" 
+              value={contactNumber} 
+              onChangeText={setContactNumber} 
+            />
+          </View>
+        </View>
 
         <TouchableOpacity style={styles.submitBtn} onPress={handleSaveStaff}>
-          <Text style={styles.submitText}>Register Staff</Text>
+          <Text style={styles.submitText}>Complete Registration</Text>
+          <Ionicons name="person-add-outline" size={20} color="#fff" style={{marginLeft: 10}} />
         </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-/* ---------------- Styles ---------------- */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f4f6fa", padding: 16 },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 14 },
-  card: { backgroundColor: "#ffffff", borderRadius: 18, padding: 16, elevation: 3 },
-  label: { fontSize: 13, color: "#6b7280", marginTop: 12, marginBottom: 4 },
-  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 10, padding: 12, backgroundColor: "#ffffff" },
-  passwordWrapper: { flexDirection: "row", alignItems: "center" },
-  submitBtn: { backgroundColor: "#2563eb", padding: 14, borderRadius: 12, alignItems: "center", marginTop: 20 },
-  submitText: { color: "#ffffff", fontWeight: "700" },
-    eyeIcon: {
-    fontSize: 18,
-    marginLeft: 8,
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  header: { paddingTop: 60, paddingHorizontal: 25, paddingBottom: 20 },
+  headerTitle: { fontSize: 26, fontWeight: "800", color: COLORS.textMain },
+  headerSub: { fontSize: 14, color: COLORS.textSub, marginTop: 4 },
+  
+  scrollBody: { paddingHorizontal: 20, paddingBottom: 40 },
+  
+  card: { 
+    backgroundColor: COLORS.white, 
+    borderRadius: 24, 
+    padding: 20, 
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: "#64748B",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
   },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 15 },
+  cardTitle: { fontSize: 16, fontWeight: "700", color: COLORS.textMain },
+
+  label: { fontSize: 12, fontWeight: "700", color: COLORS.textSub, marginTop: 15, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  
+  inputWrapper: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: COLORS.bg, 
+    borderRadius: 14, 
+    borderWidth: 1, 
+    borderColor: COLORS.border 
+  },
+  inputIcon: { paddingLeft: 15 },
+  input: { flex: 1, height: 50, paddingHorizontal: 12, fontWeight: "600", color: COLORS.textMain },
+  simpleInput: { backgroundColor: COLORS.bg, borderRadius: 14, height: 50, paddingHorizontal: 15, fontWeight: "600", color: COLORS.textMain, borderWidth: 1, borderColor: COLORS.border },
+  eyeBtn: { paddingRight: 15 },
+
+  chipGroup: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border },
+  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  chipText: { fontSize: 12, fontWeight: "600", color: COLORS.textSub },
+  chipTextActive: { color: "#fff" },
+
+  submitBtn: { 
+    backgroundColor: COLORS.primary, 
+    height: 60, 
+    borderRadius: 20, 
+    flexDirection: "row", 
+    justifyContent: "center", 
+    alignItems: "center", 
+    marginTop: 10,
+    elevation: 8,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 10
+  },
+  submitText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
 });
 
 export default StaffRegistrationScreen;

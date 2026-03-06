@@ -8,31 +8,44 @@ import {
   Alert,
   StyleSheet,
   Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import SERVER_URL from "../../config";
 
+const COLORS = {
+  primary: "#2563eb",
+  bg: "#F8FAFC",
+  white: "#FFFFFF",
+  textMain: "#1E293B",
+  textSub: "#64748B",
+  border: "#E2E8F0",
+  accent: "#EFF6FF",
+};
+
 const UserMasterRegistrationScreen = () => {
-  const [userType, setUserType] = useState("");
+  const [userType, setUserType] = useState("Staff");
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState("");
   const [roleOrSpec, setRoleOrSpec] = useState("");
   const [contact, setContact] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("Active");
+  const [loading, setLoading] = useState(false);
 
   // Doctor-specific
-  const [startHour, setStartHour] = useState(9);
-  const [endHour, setEndHour] = useState(17);
+  const [startHour] = useState(9);
+  const [endHour] = useState(18);
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [profilePic, setProfilePic] = useState<string | null>(null);
 
-  // Generate time slots
   useEffect(() => {
-    if (userType.toLowerCase() === "doctor") {
+    if (userType === "Doctor") {
       const slots: string[] = [];
       for (let hour = startHour; hour < endHour; hour++) {
         const ampm = hour >= 12 ? "PM" : "AM";
@@ -53,7 +66,6 @@ const UserMasterRegistrationScreen = () => {
     );
   };
 
-  // 📸 Pick Image (Doctor only)
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -64,7 +76,9 @@ const UserMasterRegistrationScreen = () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       base64: true,
-      quality: 0.4,
+      quality: 0.5,
+      allowsEditing: true,
+      aspect: [1, 1],
     });
 
     if (!result.canceled && result.assets[0].base64) {
@@ -72,13 +86,14 @@ const UserMasterRegistrationScreen = () => {
     }
   };
 
-  const handleSaveUser = () => {
-    if (!userType || !userId || !password || !name || !contact) {
-      Alert.alert("Validation Error", "Please fill all required fields");
+  const handleSaveUser = async () => {
+    if (!userId || !password || !name || !contact) {
+      Alert.alert("Validation Error", "Please fill all required fields marked with *");
       return;
     }
 
-    const payload: any = {
+    setLoading(true);
+    const payload = {
       userType,
       userId,
       password,
@@ -86,235 +101,246 @@ const UserMasterRegistrationScreen = () => {
       roleOrSpec,
       contact,
       status,
+      ...(userType === "Doctor" && { timeSlots: selectedSlots, profile_pic: profilePic }),
     };
 
-    if (userType.toLowerCase() === "doctor") {
-      if (selectedSlots.length === 0) {
-        Alert.alert("Validation Error", "Select at least one time slot");
-        return;
-      }
-      payload.timeSlots = selectedSlots;
-      payload.profile_pic = profilePic;
-    }
+    try {
+      const response = await fetch(`${SERVER_URL}/admin/create-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    fetch(`${SERVER_URL}/admin/create-user`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-      .then((res) => res.json())
-      .then(() => {
+      if (response.ok) {
         Alert.alert("Success", `${userType} registered successfully`);
-        setUserType("");
-        setUserId("");
-        setPassword("");
-        setName("");
-        setRoleOrSpec("");
-        setContact("");
-        setStatus("");
-        setSelectedSlots([]);
-        setProfilePic(null);
-      })
-      .catch(() => Alert.alert("Error", "Failed to register user"));
+        resetForm();
+      } else {
+        throw new Error();
+      }
+    } catch {
+      Alert.alert("Error", "Failed to register user. Check server connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setUserId(""); setPassword(""); setName(""); setRoleOrSpec("");
+    setContact(""); setSelectedSlots([]); setProfilePic(null);
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>User Master Registration</Text>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>User Type *</Text>
-        <TextInput style={styles.input} value={userType} onChangeText={setUserType} />
-
-        <Text style={styles.label}>User ID *</Text>
-        <TextInput style={styles.input} value={userId} onChangeText={setUserId} />
-
-        <Text style={styles.label}>Password *</Text>
-        <View style={styles.passwordContainer}>
-          <TextInput
-            style={styles.passwordInput}
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} />
-          </TouchableOpacity>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        
+        <View style={styles.header}>
+          <Text style={styles.title}>User Management</Text>
+          <Text style={styles.subtitle}>Register system users and medical staff</Text>
         </View>
 
-        <Text style={styles.label}>Full Name *</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} />
+        {/* 1. TYPE SELECTION */}
+        <View style={styles.card}>
+          <Text style={styles.label}>Select User Type</Text>
+          <View style={styles.typeRow}>
+            {["Staff", "Doctor", "Admin"].map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.typeChip, userType === type && styles.typeChipActive]}
+                onPress={() => setUserType(type)}
+              >
+                <Text style={[styles.typeText, userType === type && styles.typeTextActive]}>{type}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
-        <Text style={styles.label}>Role / Specialization</Text>
-        <TextInput style={styles.input} value={roleOrSpec} onChangeText={setRoleOrSpec} />
-
-        <Text style={styles.label}>Contact *</Text>
-        <TextInput style={styles.input} value={contact} onChangeText={setContact} />
-
-        <Text style={styles.label}>Status</Text>
-        <TextInput style={styles.input} value={status} onChangeText={setStatus} />
-
-        {/* Doctor Section */}
-        {userType.toLowerCase() === "doctor" && (
-          <>
-            <Text style={styles.label}>Profile Picture</Text>
-            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}>
-              <Text style={styles.uploadText}>Upload Photo</Text>
+        {/* 2. PROFILE IMAGE (ONLY FOR DOCTOR) */}
+        {userType === "Doctor" && (
+          <View style={styles.imageSection}>
+            <TouchableOpacity style={styles.imageCircle} onPress={pickImage}>
+              {profilePic ? (
+                <Image source={{ uri: `data:image/jpeg;base64,${profilePic}` }} style={styles.preview} />
+              ) : (
+                <View style={styles.placeholder}>
+                  <Ionicons name="camera-outline" size={32} color={COLORS.textSub} />
+                  <Text style={styles.placeholderText}>Add Photo</Text>
+                </View>
+              )}
             </TouchableOpacity>
+          </View>
+        )}
 
-            {profilePic && (
-              <Image
-                source={{ uri: `data:image/jpeg;base64,${profilePic}` }}
-                style={styles.preview}
-              />
-            )}
+        {/* 3. CORE CREDENTIALS */}
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.label}>User ID *</Text>
+              <TextInput style={styles.input} placeholder="ID-2024" value={userId} onChangeText={setUserId} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Password *</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                  <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={COLORS.textSub} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
 
-            <Text style={styles.label}>Available Time Slots</Text>
+          <Text style={styles.label}>Full Name *</Text>
+          <TextInput style={styles.input} placeholder="John Doe" value={name} onChangeText={setName} />
+
+          <Text style={styles.label}>{userType === "Doctor" ? "Specialization" : "Designation / Role"}</Text>
+          <TextInput style={styles.input} placeholder={userType === "Doctor" ? "Cardiology" : "Receptionist"} value={roleOrSpec} onChangeText={setRoleOrSpec} />
+
+          <Text style={styles.label}>Contact Number *</Text>
+          <TextInput style={styles.input} keyboardType="phone-pad" value={contact} onChangeText={setContact} />
+        </View>
+
+        {/* 4. DOCTOR AVAILABILITY */}
+        {userType === "Doctor" && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="clock-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Available Slots</Text>
+            </View>
             <View style={styles.slotContainer}>
               {timeSlots.map((slot) => (
                 <TouchableOpacity
                   key={slot}
-                  style={[
-                    styles.slot,
-                    selectedSlots.includes(slot) && styles.slotSelected,
-                  ]}
+                  style={[styles.slot, selectedSlots.includes(slot) && styles.slotSelected]}
                   onPress={() => toggleSlot(slot)}
                 >
-                  <Text style={{ color: selectedSlots.includes(slot) ? "#fff" : "#000" }}>
+                  <Text style={[styles.slotText, selectedSlots.includes(slot) && styles.slotTextSelected]}>
                     {slot}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-          </>
+          </View>
         )}
 
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSaveUser}>
-          <Text style={styles.submitText}>Register User</Text>
+        <TouchableOpacity style={styles.submitBtn} onPress={handleSaveUser} disabled={loading}>
+          {loading ? <ActivityIndicator color="#fff" /> : (
+            <>
+              <Text style={styles.submitText}>Complete Registration</Text>
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
+            </>
+          )}
         </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-
-/* ---------------- Styles ---------------- */
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f4f6fa",
-    padding: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 14,
-  },
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  scrollBody: { padding: 20, paddingBottom: 40 },
+  header: { marginBottom: 25 },
+  title: { fontSize: 28, fontWeight: "800", color: COLORS.textMain },
+  subtitle: { fontSize: 14, color: COLORS.textSub, marginTop: 4 },
+
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 18,
-    padding: 16,
-    elevation: 3,
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: "#64748B",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
   },
-  label: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  input: {
+
+  label: { fontSize: 12, fontWeight: "800", color: COLORS.textSub, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
+  input: { 
+    height: 52, 
+    backgroundColor: COLORS.bg, 
+    borderRadius: 14, 
+    paddingHorizontal: 15, 
+    fontWeight: "600", 
+    color: COLORS.textMain,
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: "#ffffff",
+    borderColor: COLORS.border
   },
-  submitBtn: {
-    backgroundColor: "#2563eb",
-    padding: 14,
-    borderRadius: 12,
+  row: { flexDirection: "row" },
+
+  typeRow: { flexDirection: "row", gap: 10 },
+  typeChip: { 
+    flex: 1, 
+    height: 45, 
+    borderRadius: 12, 
+    backgroundColor: COLORS.bg, 
+    justifyContent: "center", 
     alignItems: "center",
-    marginTop: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border
   },
-  submitText: {
-    color: "#ffffff",
-    fontWeight: "700",
+  typeChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  typeText: { fontWeight: "700", color: COLORS.textSub },
+  typeTextActive: { color: "#fff" },
+
+  passwordContainer: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: COLORS.bg, 
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border 
   },
-  passwordContainer: {
-    flexDirection: "row",
+  passwordInput: { flex: 1, height: 52, paddingHorizontal: 15, fontWeight: "600" },
+  eyeBtn: { paddingHorizontal: 12 },
+
+  imageSection: { alignItems: "center", marginVertical: 10 },
+  imageCircle: { 
+    width: 110, 
+    height: 110, 
+    borderRadius: 55, 
+    backgroundColor: COLORS.white, 
+    borderWidth: 1, 
+    borderColor: COLORS.border,
+    justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
+    elevation: 3
+  },
+  preview: { width: "100%", height: "100%" },
+  placeholder: { alignItems: "center" },
+  placeholderText: { fontSize: 10, fontWeight: "700", color: COLORS.textSub, marginTop: 4 },
+
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 15 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: COLORS.textMain },
+  slotContainer: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  slot: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 10, 
+    borderRadius: 10, 
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    backgroundColor: "#ffffff",
+    borderColor: COLORS.border 
   },
+  slotSelected: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  slotText: { fontSize: 12, fontWeight: "700", color: COLORS.textSub },
+  slotTextSelected: { color: "#fff" },
 
-  passwordInput: {
-    flex: 1,
-    padding: 12,
+  submitBtn: { 
+    backgroundColor: COLORS.primary, 
+    height: 60, 
+    borderRadius: 20, 
+    flexDirection: "row", 
+    justifyContent: "center", 
+    alignItems: "center", 
+    marginTop: 10,
+    gap: 10,
+    elevation: 5
   },
-
-  eyeIcon: {
-    paddingHorizontal: 12,
-  },
-  slotContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 8,
-  },
-
-  slot: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#ffffff",
-  },
-
-  slotSelected: {
-    backgroundColor: "#2563eb",
-    borderColor: "#2563eb",
-  },
-
-  slotText: {
-    color: "#374151",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  slotTextSelected: {
-    color: "#ffffff",
-  },
-uploadBtn: {
-  backgroundColor: "#2563eb",
-  paddingVertical: 12,
-  borderRadius: 8,
-  alignItems: "center",
-  justifyContent: "center",
-  marginBottom: 12,
-},
-
-uploadText: {
-  color: "#ffffff",
-  fontSize: 14,
-  fontWeight: "600",
-},
-
-preview: {
-  width: 120,
-  height: 120,
-  borderRadius: 60,
-  alignSelf: "center",
-  marginTop: 10,
-  marginBottom: 16,
-  borderWidth: 2,
-  borderColor: "#e5e7eb",
-  backgroundColor: "#f3f4f6",
-},
-
+  submitText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
 });
 
 export default UserMasterRegistrationScreen;

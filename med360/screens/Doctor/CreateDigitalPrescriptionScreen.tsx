@@ -12,7 +12,8 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import SERVER_URL from "../../config";
 
-// --- Type Definitions ---
+// --- Type Definitions 
+// ---
 type PatientDetails = {
   id: string;
   name: string;
@@ -348,7 +349,7 @@ const styles = StyleSheet.create({
   screenContainer: { flex: 1, backgroundColor: "#F4F6F8" },
   header: {
     padding: 20,
-    backgroundColor: "#1E3A8A",
+    backgroundColor: "#0EA5A4",
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     paddingTop: 50,

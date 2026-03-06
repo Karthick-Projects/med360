@@ -7,273 +7,452 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  ActivityIndicator,
+  StatusBar,
+  Dimensions,
 } from "react-native";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import SERVER_URL from "../../config";
 
+const { width } = Dimensions.get("window");
+
+const COLORS = {
+  primary: "#2563eb",
+  success: "#10B981",
+  bg: "#F1F5F9",
+  white: "#FFFFFF",
+  textMain: "#1E293B",
+  textSub: "#64748B",
+  border: "#E2E8F0",
+  cardShadow: "rgba(100, 116, 139, 0.12)",
+};
+
 const AdmissionDetailsScreen = () => {
-  const [admissionId, setAdmissionId] = useState("");
+
   const [patientId, setPatientId] = useState("");
   const [patient, setPatient] = useState<any>(null);
 
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
   const [ward, setWard] = useState("");
   const [bedNumber, setBedNumber] = useState("");
-  const [admissionType, setAdmissionType] = useState("");
+  const [admissionType, setAdmissionType] = useState("Routine");
+
+  const [bedStatus, setBedStatus] = useState<any>(null);
+
   const [admissionDateTime, setAdmissionDateTime] = useState("");
 
-  /* Auto-generate Admission ID */
   useEffect(() => {
-    setAdmissionId("ADM-" + Math.floor(100000 + Math.random() * 900000));
-    setAdmissionDateTime(new Date().toLocaleString());
+    setAdmissionDateTime(
+      new Date().toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    );
   }, []);
 
-  /* Fetch Patient */
+  // --------------------------------
+  // PATIENT LOOKUP
+  // --------------------------------
   const handlePatientLookup = async () => {
-    if (!patientId) {
-      Alert.alert("Error", "Enter Patient ID");
+    if (!patientId.trim()) {
+      Alert.alert("Required", "Enter Patient ID");
       return;
     }
+
+    setLoading(true);
 
     try {
       const res = await fetch(`${SERVER_URL}/admin/${patientId}`);
       const data = await res.json();
 
       if (!res.ok) {
-        Alert.alert("Error", data.detail || "Patient not found");
         setPatient(null);
-        return;
+        Alert.alert("Error", "Patient not found");
+      } else {
+        setPatient(data);
       }
-
-      setPatient(data);
     } catch (error) {
-      Alert.alert("Network Error", "Unable to fetch patient");
+      Alert.alert("Error", "Server unreachable");
     }
+
+    setLoading(false);
   };
 
-  /* Save Admission */
-const handleSaveAdmission = async () => {
-  if (!patient || !ward || !bedNumber || !admissionType) {
-    Alert.alert("Validation Error", "Please fill all required fields");
-    return;
-  }
+  // --------------------------------
+  // CHECK WARD BED STATUS
+  // --------------------------------
+  const checkWardAvailability = async (wardValue: string) => {
 
-  try {
-    const res = await fetch(`${SERVER_URL}/admin/admission-create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        patientId: patient.patientId,
-        admissionType,
-        ward,
-        bedNumber
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      Alert.alert("Error", data.detail || "Failed to create admission");
+    if (!wardValue) {
+      setBedStatus(null);
       return;
     }
 
-    Alert.alert(
-      "Success",
-      `Patient admitted successfully\nAdmission ID: ${data.admissionId}`
-    );
+    try {
+      const res = await fetch(
+        `${SERVER_URL}/admin/ward-bed-status/${wardValue}`
+      );
 
-    // Reset form (keep patient search optional)
-    setPatientId("");
+      const data = await res.json();
+
+      if (res.ok) {
+        setBedStatus(data);
+
+        if (data.availableBeds <= 0) {
+          Alert.alert(
+            "Ward Full",
+            `All ${data.totalBeds} beds are occupied in ${wardValue}`
+          );
+          setWard("");
+          setBedNumber("");
+        }
+      }
+    } catch (error) {
+      Alert.alert("Error", "Unable to check bed availability");
+    }
+  };
+
+  // --------------------------------
+  // CREATE ADMISSION
+  // --------------------------------
+  const handleCreateAdmission = async () => {
+
+    if (!patient) {
+      Alert.alert("Step Required", "Verify patient first");
+      return;
+    }
+
+    if (!ward || !bedNumber) {
+      Alert.alert("Missing Info", "Enter Ward and Bed Number");
+      return;
+    }
+
+    if (bedStatus && bedStatus.availableBeds <= 0) {
+      Alert.alert("Ward Full", "No beds available in this ward");
+      return;
+    }
+
+    setSubmitting(true);
+
+    const payload = {
+      patientId: patientId,
+      ward: ward,
+      bedNumber: bedNumber,
+    };
+
+    try {
+      const response = await fetch(
+        `${SERVER_URL}/admin/admission-create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        Alert.alert(
+          "Admission Success",
+          `Admission ID: ${result.admissionId}`,
+          [{ text: "OK", onPress: resetForm }]
+        );
+      } else {
+        Alert.alert("Failed", result.detail);
+      }
+    } catch (error) {
+      Alert.alert("Network Error", "Unable to connect to server");
+    }
+
+    setSubmitting(false);
+  };
+
+  // --------------------------------
+  // RESET FORM
+  // --------------------------------
+  const resetForm = () => {
     setPatient(null);
+    setPatientId("");
     setWard("");
     setBedNumber("");
-    setAdmissionType("");
-
-  } catch (error) {
-    console.error(error);
-    Alert.alert("Network Error", "Unable to save admission");
-  }
-};
-
+    setBedStatus(null);
+    setAdmissionType("Routine");
+  };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Admission Details</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Admission ID</Text>
-        <Text style={styles.highlight}>{admissionId}</Text>
-
-        <Text style={styles.label}>Patient ID *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter Patient ID"
-          value={patientId}
-          onChangeText={setPatientId}
-        />
-
-        <TouchableOpacity style={styles.lookupBtn} onPress={handlePatientLookup}>
-          <Text style={styles.lookupText}>Fetch Patient Details</Text>
-        </TouchableOpacity>
-
-        {/* Patient Details Box */}
-        {patient && (
-          <View style={styles.patientBox}>
-            <Text style={styles.patientTitle}>Patient Details</Text>
-
-            <Text style={styles.patientRow}>
-              <Text style={styles.patientLabel}>Name: </Text>
-              {patient.name}
-            </Text>
-
-            <Text style={styles.patientRow}>
-              <Text style={styles.patientLabel}>Age: </Text>
-              {patient.age}
-            </Text>
-
-            <Text style={styles.patientRow}>
-              <Text style={styles.patientLabel}>Gender: </Text>
-              {patient.gender}
-            </Text>
-
-            <Text style={styles.patientRow}>
-              <Text style={styles.patientLabel}>Mobile: </Text>
-              {patient.mobile}
-            </Text>
-
-            <Text style={styles.patientRow}>
-              <Text style={styles.patientLabel}>Disease: </Text>
-              {patient.disease}
-            </Text>
-
-            <Text style={styles.patientRow}>
-              <Text style={styles.patientLabel}>Doctor: </Text>
-              {patient.assignedDoctor}
-            </Text>
-          </View>
-        )}
-
-        <Text style={styles.label}>Admission Type *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Emergency / OP to IP"
-          value={admissionType}
-          onChangeText={setAdmissionType}
-        />
-
-        <Text style={styles.label}>Ward *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ward name / number"
-          value={ward}
-          onChangeText={setWard}
-        />
-
-        <Text style={styles.label}>Bed Number *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter bed number"
-          keyboardType="numeric"
-          value={bedNumber}
-          onChangeText={setBedNumber}
-        />
-
-        <Text style={styles.label}>Admission Date & Time</Text>
-        <Text style={styles.readonly}>{admissionDateTime}</Text>
-
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSaveAdmission}>
-          <Text style={styles.submitText}>Confirm Admission</Text>
-        </TouchableOpacity>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Inpatient Admission</Text>
+        <Text style={styles.headerSub}>Allocate facilities for new admission</Text>
       </View>
-    </ScrollView>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollBody}
+      >
+
+        {/* PATIENT SEARCH */}
+        <View style={styles.card}>
+
+          <View style={styles.cardHeader}>
+            <Ionicons name="search-circle" size={24} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Identify Patient</Text>
+          </View>
+
+          <View style={styles.searchBox}>
+            <TextInput
+              style={styles.inputSearch}
+              placeholder="Enter Patient ID"
+              value={patientId}
+              onChangeText={setPatientId}
+            />
+
+            <TouchableOpacity
+              style={styles.searchBtn}
+              onPress={handlePatientLookup}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {patient && (
+            <View style={styles.verifiedProfile}>
+              <Text style={styles.pName}>{patient.name}</Text>
+              <Text style={styles.pDetails}>
+                {patient.age}Y • {patient.gender} • {patient.mobile}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* FACILITY ALLOCATION */}
+        <View style={[styles.card, !patient && styles.disabledCard]}>
+
+          <View style={styles.cardHeader}>
+            <MaterialCommunityIcons
+              name="hospital-building"
+              size={24}
+              color={COLORS.primary}
+            />
+            <Text style={styles.cardTitle}>Facility Allocation</Text>
+          </View>
+
+
+          <Text style={styles.label}>Ward</Text>
+
+          <TextInput
+            style={styles.gridInput}
+            placeholder="e.g. ICU-1"
+            value={ward}
+            onChangeText={(text) => {
+              setWard(text);
+              checkWardAvailability(text);
+            }}
+            editable={!!patient}
+          />
+
+          {bedStatus && (
+            <View style={{ marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: COLORS.textSub }}>
+                Occupied Beds: {bedStatus.occupiedBeds}/{bedStatus.totalBeds}
+              </Text>
+
+              <Text style={{ fontSize: 12, color: COLORS.success }}>
+                Available Beds: {bedStatus.availableBeds}
+              </Text>
+            </View>
+          )}
+
+          <Text style={styles.label}>Bed Number</Text>
+
+          <TextInput
+            style={styles.gridInput}
+            placeholder="Bed 1"
+            value={bedNumber}
+            onChangeText={setBedNumber}
+            editable={!!patient}
+          />
+        </View>
+
+        {/* SUBMIT */}
+        <TouchableOpacity
+          style={[
+            styles.submitBtn,
+            (!patient || submitting) && { backgroundColor: COLORS.textSub },
+          ]}
+          disabled={!patient || submitting}
+          onPress={handleCreateAdmission}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.submitBtnText}>Confirm Inpatient Entry</Text>
+              <Ionicons name="shield-checkmark" size={20} color="#fff" />
+            </>
+          )}
+        </TouchableOpacity>
+
+      </ScrollView>
+    </View>
   );
 };
 
-/* ---------------- Styles ---------------- */
-
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
-    backgroundColor: "#f4f6fa",
-    padding: 16,
+    backgroundColor: COLORS.bg,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 14,
+
+  header: {
+    paddingHorizontal: 25,
+    paddingTop: 60,
+    paddingBottom: 20,
   },
-  
+
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: COLORS.textMain,
+  },
+
+  headerSub: {
+    fontSize: 14,
+    color: COLORS.textSub,
+    marginTop: 4,
+  },
+
+  scrollBody: {
+    paddingHorizontal: 20,
+    paddingBottom: 50,
+  },
+
   card: {
-    backgroundColor: "#ff2ffff",
-    borderRadius: 18,
-    padding: 16,
-    elevation: 2,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
   },
-  label: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginTop: 12,
-    marginBottom: 4,
+
+  disabledCard: {
+    opacity: 0.5,
   },
-  highlight: {
+
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 15,
+    gap: 10,
+  },
+
+  cardTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#2563eb",
-    marginBottom: 12,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: "#ffffff",
-  },
-  lookupBtn: {
-    backgroundColor: "#e0e7ff",
-    padding: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  lookupText: {
-    color: "#1d4ed8",
-    fontWeight: "600",
-  },
-  patientBox: {
-    backgroundColor: "#f0fdf4",
+
+  searchBox: {
+    flexDirection: "row",
+    backgroundColor: COLORS.bg,
     borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
+    padding: 5,
   },
-  patientTitle: {
-    fontWeight: "700",
-    marginBottom: 6,
-    color: "#065f46",
+
+  inputSearch: {
+    flex: 1,
+    paddingHorizontal: 15,
   },
-  patientRow: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  patientLabel: {
-    fontWeight: "600",
-  },
-  readonly: {
-    backgroundColor: "#f3f4f6",
-    padding: 12,
+
+  searchBtn: {
+    backgroundColor: COLORS.primary,
+    padding: 10,
     borderRadius: 10,
-    color: "#374151",
   },
+
+  verifiedProfile: {
+    marginTop: 15,
+  },
+
+  pName: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  pDetails: {
+    color: COLORS.textSub,
+  },
+
+  label: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 15,
+    marginBottom: 5,
+  },
+
+  typeRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  typeBtn: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+  },
+
+  typeBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+
+  typeBtnText: {
+    color: COLORS.textSub,
+  },
+
+  typeBtnTextActive: {
+    color: "#fff",
+  },
+
+  gridInput: {
+    backgroundColor: COLORS.bg,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
   submitBtn: {
-    backgroundColor: "#2563eb",
-    padding: 14,
-    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    height: 60,
+    borderRadius: 20,
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 20,
+    gap: 10,
   },
-  submitText: {
-    color: "#ffffff",
-    fontWeight: "700",
+
+  submitBtnText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
   },
+
 });
 
 export default AdmissionDetailsScreen;

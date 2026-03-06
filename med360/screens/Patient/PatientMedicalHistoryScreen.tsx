@@ -14,14 +14,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import SERVER_URL from "../../config";
 
 const PRIMARY_TEAL = "#0D9488";
-const PRIMARY_DARK = "#004912";
+const PRIMARY_DARK = "#62daac";
 const BORDER_COLOR = "#E2E8F0";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.88; // Large enough to see, small enough to hint at next card
 
 const PatientMedicalHistoryScreen: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"Records" | "Vitals" | "Prescriptions">("Vitals");
+  const [activeTab, setActiveTab] = useState<"Vitals" | "Prescriptions">("Vitals");
   const [patientData, setPatientData] = useState<any>(null);
   const [vitalsData, setVitalsData] = useState<any[]>([]);
   const [prescriptionData, setPrescriptionData] = useState<any[]>([]);
@@ -88,7 +88,7 @@ const PatientMedicalHistoryScreen: React.FC = () => {
         {/* STICKY TABS */}
         <View style={styles.tabBar}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabContainer}>
-            {["Vitals", "Prescriptions", "Records"].map((tab) => (
+            {["Vitals", "Prescriptions"].map((tab) => (
               <TouchableOpacity
                 key={tab}
                 onPress={() => setActiveTab(tab as any)}
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   avatar: { width: 60, height: 60, borderRadius: 20, backgroundColor: PRIMARY_TEAL, justifyContent: "center", alignItems: "center" },
   avatarText: { color: "#FFF", fontSize: 24, fontWeight: "bold" },
   headerName: { color: "#FFF", fontSize: 20, fontWeight: "700" },
-  headerId: { color: "#94A3B8", fontSize: 13, marginTop: 4 },
+  headerId: { color: "#ffffff", fontSize: 13, marginTop: 4 },
 
   tabBar: { backgroundColor: "#F8FAFC", paddingVertical: 15 },
   tabContainer: { paddingHorizontal: 20, gap: 10 },
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   vLabel: { fontSize: 11, color: "#94A3B8", marginTop: 2, fontWeight: "600" },
 
   /* Prescription Card Styles */
-  prescriptionCard: { backgroundColor: "#FFF", width: CARD_WIDTH, borderRadius: 24, padding: 20, marginRight: 15, elevation: 4 },
+  prescriptionCard: { backgroundColor: "#FFF", width: CARD_WIDTH, borderRadius: 24, padding: 20, margin: 5, elevation: 7 },
   prescHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   diseaseText: { fontSize: 18, fontWeight: "700", color: PRIMARY_DARK, flex: 1 },
   statusBadge: { backgroundColor: "#F1F5F9", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },

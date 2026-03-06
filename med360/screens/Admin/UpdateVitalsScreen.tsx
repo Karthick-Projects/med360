@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import SERVER_URL from "../../config";
@@ -19,12 +23,24 @@ type Patient = {
   gender?: string;
 };
 
+const COLORS = {
+  primary: "#1E3A8A",
+  secondary: "#10B981",
+  bg: "#F8FAFC",
+  white: "#FFFFFF",
+  textMain: "#1E293B",
+  textSub: "#64748B",
+  border: "#E2E8F0",
+  danger: "#EF4444",
+  accent: "#F1F5F9",
+};
+
 const AdminUpdateVitalsScreen: React.FC = () => {
   const [patientId, setPatientId] = useState("");
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // --- Vitals ---
+  // --- Vitals State ---
   const [heartRate, setHeartRate] = useState("");
   const [bloodPressure, setBloodPressure] = useState("");
   const [temperature, setTemperature] = useState("");
@@ -32,10 +48,9 @@ const AdminUpdateVitalsScreen: React.FC = () => {
   const [respirationRate, setRespirationRate] = useState("");
   const [bloodSugar, setBloodSugar] = useState("");
 
-  // --- Fetch Patient Details ---
   const fetchPatientDetails = async () => {
     if (!patientId.trim()) {
-      Alert.alert("Error", "Please enter Patient ID");
+      Alert.alert("Input Required", "Please enter a Patient ID to begin.");
       return;
     }
 
@@ -44,7 +59,7 @@ const AdminUpdateVitalsScreen: React.FC = () => {
       const res = await fetch(`${SERVER_URL}/patient/${patientId}`);
 
       if (!res.ok) {
-        Alert.alert("Error", "Patient not found");
+        Alert.alert("Not Found", "No patient record associated with this ID.");
         setPatient(null);
         return;
       }
@@ -52,16 +67,21 @@ const AdminUpdateVitalsScreen: React.FC = () => {
       const data = await res.json();
       setPatient(data);
     } catch (err) {
-      Alert.alert("Error", "Failed to fetch patient");
+      Alert.alert("Network Error", "Unable to reach the server.");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Submit Vitals ---
   const submitVitals = async () => {
     if (!patient) {
-      Alert.alert("Error", "Fetch patient first");
+      Alert.alert("Error", "Please verify a patient first.");
+      return;
+    }
+
+    // Basic validation to check if at least one vital is entered
+    if (!heartRate && !bloodPressure && !temperature && !spo2 && !respirationRate && !bloodSugar) {
+      Alert.alert("Empty Data", "Please enter at least one vital metric.");
       return;
     }
 
@@ -73,9 +93,11 @@ const AdminUpdateVitalsScreen: React.FC = () => {
       spo2,
       respiration_rate: respirationRate,
       blood_sugar: bloodSugar,
+      timestamp: new Date().toISOString(),
     };
 
     try {
+      setLoading(true);
       const res = await fetch(`${SERVER_URL}/admin/vitals/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -83,13 +105,15 @@ const AdminUpdateVitalsScreen: React.FC = () => {
       });
 
       if (res.ok) {
-        Alert.alert("Success", "Vitals updated successfully");
+        Alert.alert("Success", "Vitals have been logged successfully.");
         resetVitals();
       } else {
-        Alert.alert("Error", "Failed to update vitals");
+        Alert.alert("Update Failed", "Server rejected the update. Please check data format.");
       }
     } catch {
-      Alert.alert("Error", "Server error");
+      Alert.alert("Error", "Server connection lost.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -103,148 +127,250 @@ const AdminUpdateVitalsScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.headerTitle}>Update Patient Vitals</Text>
-
-      {/* --- Patient ID --- */}
-      <View style={styles.card}>
-        <Text style={styles.label}>Patient ID</Text>
-        <View style={styles.row}>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter Patient ID"
-            value={patientId}
-            onChangeText={setPatientId}
-          />
-          <TouchableOpacity style={styles.fetchButton} onPress={fetchPatientDetails}>
-            <Ionicons name="search" size={20} color="#FFF" />
-          </TouchableOpacity>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === "ios" ? "padding" : "height"} 
+      style={styles.container}
+    >
+      <StatusBar barStyle="dark-content" />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Vitals Monitoring</Text>
+          <Text style={styles.headerSub}>Update real-time patient metrics</Text>
         </View>
 
-        {loading && <Text style={styles.loadingText}>Fetching patient...</Text>}
+        {/* --- Patient Search Card --- */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>IDENTIFY PATIENT</Text>
+          <View style={styles.searchRow}>
+            <View style={styles.inputContainer}>
+              <Ionicons name="id-card-outline" size={18} color={COLORS.textSub} style={styles.searchIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. PAT-102"
+                value={patientId}
+                onChangeText={setPatientId}
+                autoCapitalize="characters"
+              />
+            </View>
+            <TouchableOpacity 
+              style={[styles.fetchButton, loading && { opacity: 0.7 }]} 
+              onPress={fetchPatientDetails}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#FFF" size="small" /> : <Ionicons name="search" size={20} color="#FFF" />}
+            </TouchableOpacity>
+          </View>
 
+          {patient && (
+            <View style={styles.patientProfile}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{patient.name.charAt(0)}</Text>
+              </View>
+              <View style={styles.patientMeta}>
+                <Text style={styles.pName}>{patient.name}</Text>
+                <Text style={styles.pData}>
+                  {patient.gender || "N/A"} • {patient.age ? `${patient.age} yrs` : "Age N/A"} • ID: {patient.id}
+                </Text>
+              </View>
+              <Ionicons name="checkmark-circle" size={24} color={COLORS.secondary} />
+            </View>
+          )}
+        </View>
+
+        {/* --- Vitals Entry Grid --- */}
         {patient && (
-          <View style={styles.patientInfo}>
-            <Text style={styles.patientText}><Text style={styles.bold}>Name:</Text> {patient.name}</Text>
-            <Text style={styles.patientText}><Text style={styles.bold}>ID:</Text> {patient.id}</Text>
-            {patient.age && <Text style={styles.patientText}><Text style={styles.bold}>Age:</Text> {patient.age}</Text>}
-            {patient.gender && <Text style={styles.patientText}><Text style={styles.bold}>Gender:</Text> {patient.gender}</Text>}
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.cardLabel}>BIOMETRIC DATA</Text>
+              <TouchableOpacity onPress={resetVitals}>
+                <Text style={styles.clearText}>Clear All</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.grid}>
+              <VitalBox icon="heart-pulse" label="Heart Rate" unit="BPM" value={heartRate} onChange={setHeartRate} color="#EF4444" />
+              <VitalBox icon="blood-bag" label="Blood Pressure" unit="mmHg" value={bloodPressure} onChange={setBloodPressure} color="#3B82F6" />
+            </View>
+
+            <View style={styles.grid}>
+              <VitalBox icon="thermometer" label="Temp" unit="°F" value={temperature} onChange={setTemperature} color="#F59E0B" />
+              <VitalBox icon="oxygen-cylinder" label="SpO₂" unit="%" value={spo2} onChange={setSpo2} color="#10B981" />
+            </View>
+
+            <View style={styles.grid}>
+              <VitalBox icon="lungs" label="Respiration" unit="rate" value={respirationRate} onChange={setRespirationRate} color="#8B5CF6" />
+              <VitalBox icon="diabetes" label="Blood Sugar" unit="mg/dL" value={bloodSugar} onChange={setBloodSugar} color="#EC4899" />
+            </View>
+
+            <TouchableOpacity style={styles.submitButton} onPress={submitVitals} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Text style={styles.submitText}>Save Vitals Log</Text>
+                  <Ionicons name="cloud-upload-outline" size={20} color="#FFF" style={{marginLeft: 8}} />
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         )}
-      </View>
-
-      {/* --- Vitals Input --- */}
-      {patient && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Vitals & Metrics</Text>
-
-          <VitalInput icon="heart-pulse" label="Heart Rate (BPM)" value={heartRate} onChange={setHeartRate} />
-          <VitalInput icon="blood-bag" label="Blood Pressure (mmHg)" value={bloodPressure} onChange={setBloodPressure} />
-          <VitalInput icon="thermometer" label="Temperature (°F)" value={temperature} onChange={setTemperature} />
-          <VitalInput icon="oxygen-cylinder" label="SpO₂ (%)" value={spo2} onChange={setSpo2} />
-          <VitalInput icon="lungs" label="Respiration Rate" value={respirationRate} onChange={setRespirationRate} />
-          <VitalInput icon="diabetes" label="Blood Sugar (mg/dL)" value={bloodSugar} onChange={setBloodSugar} />
-
-          <TouchableOpacity style={styles.submitButton} onPress={submitVitals}>
-            <Text style={styles.submitText}>Submit Vitals</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-// --- Reusable Input Component ---
-const VitalInput = ({
+// --- Specialized Input Sub-component ---
+const VitalBox = ({
   icon,
   label,
+  unit,
   value,
   onChange,
+  color,
 }: {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
+  unit: string;
   value: string;
   onChange: (text: string) => void;
+  color: string;
 }) => (
-  <View style={styles.vitalRow}>
-    <MaterialCommunityIcons name={icon} size={22} color="#10B981" />
-    <TextInput
-      style={styles.vitalInput}
-      placeholder={label}
-      keyboardType="numeric"
-      value={value}
-      onChangeText={onChange}
-    />
+  <View style={styles.vitalBox}>
+    <View style={styles.vitalHeader}>
+      <MaterialCommunityIcons name={icon} size={18} color={color} />
+      <Text style={styles.vitalLabel}>{label}</Text>
+    </View>
+    <View style={styles.vitalInputContainer}>
+      <TextInput
+        style={styles.vitalInput}
+        placeholder="--"
+        placeholderTextColor="#CBD5E1"
+        keyboardType="numeric"
+        value={value}
+        onChangeText={onChange}
+      />
+      <Text style={styles.unitText}>{unit}</Text>
+    </View>
   </View>
 );
 
 export default AdminUpdateVitalsScreen;
 
-// --- Styles ---
+// --- Enhanced Styles ---
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F6F8", padding: 16 },
-  headerTitle: { fontSize: 22, fontWeight: "bold", marginBottom: 16, color: "#1E3A8A" },
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  
+  header: { marginBottom: 25, marginTop: Platform.OS === 'ios' ? 0 : 20 },
+  headerTitle: { fontSize: 28, fontWeight: "800", color: COLORS.primary },
+  headerSub: { fontSize: 15, color: COLORS.textSub, marginTop: 4 },
 
   card: {
-    backgroundColor: "#FFF",
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    padding: 20,
+    borderRadius: 24,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 5 },
   },
 
-  label: { fontSize: 14, fontWeight: "600", marginBottom: 6 },
-  row: { flexDirection: "row", alignItems: "center" },
+  cardLabel: { fontSize: 11, fontWeight: "800", color: COLORS.textSub, letterSpacing: 1.2, marginBottom: 15 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  clearText: { fontSize: 12, color: COLORS.danger, fontWeight: '600', marginBottom: 15 },
 
+  searchRow: { flexDirection: "row", alignItems: "center" },
+  inputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.accent,
+    borderRadius: 16,
+    paddingHorizontal: 15,
+  },
+  searchIcon: { marginRight: 10 },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
-    padding: 10,
-    backgroundColor: "#FFF",
+    height: 52,
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.textMain,
   },
-
   fetchButton: {
-    marginLeft: 10,
-    backgroundColor: "#10B981",
-    padding: 10,
-    borderRadius: 8,
-  },
-
-  loadingText: { marginTop: 8, fontSize: 12, color: "#64748B" },
-
-  patientInfo: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#E2E8F0" },
-  patientText: { fontSize: 14, color: "#334155", marginBottom: 4 },
-  bold: { fontWeight: "700" },
-
-  sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 10 },
-
-  vitalRow: {
-    flexDirection: "row",
+    marginLeft: 12,
+    backgroundColor: COLORS.secondary,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 10,
-    backgroundColor: "#FFF",
+    elevation: 2,
   },
 
-  vitalInput: { flex: 1, padding: 10 },
+  patientProfile: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: "#F0FDF4", 
+    padding: 15, 
+    borderRadius: 18, 
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: "#DCFCE7"
+  },
+  avatar: { 
+    width: 48, 
+    height: 48, 
+    borderRadius: 14, 
+    backgroundColor: COLORS.secondary, 
+    justifyContent: "center", 
+    alignItems: "center",
+    marginRight: 15 
+  },
+  avatarText: { color: "#FFF", fontSize: 20, fontWeight: "bold" },
+  patientMeta: { flex: 1 },
+  pName: { fontSize: 18, fontWeight: "700", color: "#166534" },
+  pData: { fontSize: 13, color: "#15803D", marginTop: 2 },
+
+  grid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  vitalBox: {
+    flex: 1,
+    backgroundColor: COLORS.accent,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  vitalHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  vitalLabel: { fontSize: 12, fontWeight: "700", color: COLORS.textSub },
+  vitalInputContainer: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  vitalInput: { 
+    fontSize: 22, 
+    fontWeight: "800", 
+    color: COLORS.textMain, 
+    padding: 0,
+    minWidth: 40 
+  },
+  unitText: { fontSize: 12, color: COLORS.textSub, fontWeight: "600", marginBottom: 4 },
 
   submitButton: {
-    backgroundColor: "#10B981",
-    padding: 14,
-    borderRadius: 10,
-    marginTop: 10,
+    backgroundColor: COLORS.primary,
+    height: 60,
+    borderRadius: 18,
+    flexDirection: 'row',
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 15,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
-
   submitText: {
     color: "#FFF",
-    textAlign: "center",
-    fontWeight: "700",
-    fontSize: 16,
+    fontWeight: "800",
+    fontSize: 17,
   },
 });

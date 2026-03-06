@@ -1,146 +1,196 @@
-from fastapi import APIRouter, HTTPException,Body
-from typing import List
-from datetime import datetime, timedelta
-from models import CreateAppointmentModel, TimeSlot
-from database import appointments_collection, doctors_collection  # MongoDB collections
+from fastapi import APIRouter, HTTPException, Body
+from datetime import datetime
+from database import appointments_collection
+from models import CreateAppointmentModel,DischargeUpdate
 from bson import ObjectId
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
-
-# --- Helper: Generate AM/PM slots ---
-def generate_slots(start_hour=9, end_hour=17):
-    """Generate 1-hour slots in AM/PM format from start_hour to end_hour."""
-    slots = []
-    for hour in range(start_hour, end_hour):
-        dt = datetime.strptime(f"{hour}:00", "%H:%M")
-        slot_time = dt.strftime("%I:%M %p")  # AM/PM format
-        slots.append(slot_time)
-    return slots
+MAX_STANDARD = 25
+MAX_EMERGENCY = 30 # Standard 25 + 5 Emergency
 
 
-# --- GET TIME SLOTS ---
-@router.get("/timeslots", response_model=List[TimeSlot])
-def get_time_slots(doctor_id: str, date: str):
+# --- GET REGISTRATION STATUS ---
+@router.get("/doctor/{doctor_id}/registrations")
+def get_registration_status(doctor_id: str, date: str):
     """
-    Return all time slots for a doctor on a given date.
-    Marks slots as available or booked.
+    Returns counts. We show the 'max' as 25 by default, 
+    but the frontend handles the toggle logic.
     """
     try:
-        # Fetch doctor
-        doctor = doctors_collection.find_one({"doctorId": doctor_id})
-        if not doctor:
-            raise HTTPException(status_code=404, detail="Doctor not found")
-
-        # Use doctor's working hours if defined, else default 9-5
-        start_hour = doctor.get("start_hour", 9)
-        end_hour = doctor.get("end_hour", 17)
-
-        all_slots = generate_slots(start_hour, end_hour)
-
-        # Get booked times for this doctor on the date
-        booked_appts = appointments_collection.find({
+        count = appointments_collection.count_documents({
             "doctor_id": doctor_id,
             "date": date
         })
-        booked_times = [appt["time"] for appt in booked_appts]
 
-        # Build slots list with availability
-        slots = []
-        for idx, time_str in enumerate(all_slots, start=1):
-            slots.append(TimeSlot(
-                id=str(idx),
-                time=time_str,
-                available=time_str not in booked_times
-            ))
+        return {
+            "doctor_id": doctor_id,
+            "date": date,
+            "filled": count,
+            "remaining": MAX_STANDARD - count,
+            "max_standard": MAX_STANDARD,
+            "max_emergency": MAX_EMERGENCY
+        }
 
-        return slots
-
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch time slots: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- CREATE APPOINTMENT ---
 @router.post("/create")
 def create_appointment(data: CreateAppointmentModel):
-    """
-    Book a new appointment for a doctor.
-    """
     try:
-        # Check if the slot is already booked
-        existing = appointments_collection.find_one({
+        # 1. Check current count for this doctor/date
+        count = appointments_collection.count_documents({
             "doctor_id": data.doctor_id,
-            "date": data.date,
-            "time": data.time
+            "date": data.date
         })
-        if existing:
-            raise HTTPException(status_code=400, detail="Time slot already booked")
 
-        # Insert new appointment
-        appointments_collection.insert_one(data.dict())
-        return {"detail": "Appointment booked successfully"}
+        # 2. Determine limit based on the incoming request type
+        # If it's an emergency booking, we allow up to 30.
+        # If standard, we stop at 25.
+        current_limit = MAX_EMERGENCY if data.is_emergency else MAX_STANDARD
+
+        if count >= current_limit:
+            limit_type = "Emergency" if data.is_emergency else "Standard"
+            raise HTTPException(
+                status_code=400,
+                detail=f"{limit_type} registration limit reached ({current_limit} slots)"
+            )
+
+        # 3. Prepare data
+        appointment = data.dict()
+        appointment["created_at"] = datetime.now()
+        
+        # If it's an admin emergency booking, we might want to auto-confirm it
+        if data.is_emergency:
+            appointment["status"] = "Confirmed"
+
+        appointments_collection.insert_one(appointment)
+
+        return {
+            "message": "Appointment registered successfully",
+            "token_number": count + 1,
+            "type": "Emergency" if data.is_emergency else "Standard"
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create appointment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- DOCTOR TODAY LIST ---
 @router.get("/doctor/{doctor_id}/today")
 def get_today_appointments(doctor_id: str):
-    try:
-        today_iso = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
 
-        cursor = appointments_collection.find({
-            "doctor_id": doctor_id,
-            "date": today_iso
+    # Change: Added .sort([("is_emergency", -1), ("created_at", 1)])
+    # This sorts by Emergency FIRST (True/1 comes before False/0), 
+    # then by time of booking.
+    cursor = appointments_collection.find({
+        "doctor_id": doctor_id,
+        "date": today
+    }).sort([
+        ("is_emergency", -1), 
+        ("created_at", 1)
+    ])
+
+    appointments = []
+
+    for doc in cursor:
+        appointments.append({
+            "id": str(doc["_id"]),
+            "patientId": doc.get("patient_id"),
+            "phone": doc.get("mobilenumber"),
+            "reason": doc.get("reason"),
+            "date": doc.get("date"),
+            "status": doc.get("status"),
+            "is_emergency": doc.get("is_emergency", False) # <--- Ensure this is returned
         })
 
-        appointments = []
-        for doc in cursor:
-            appointments.append({
-                "id": str(doc["_id"]),
-                "patientId": doc.get("patient_id"),
-                "phone": doc.get("mobilenumber"),
-                "reason": doc.get("reason"),
-                "date": doc.get("date"),
-                "time": doc.get("time"),
-                "status": doc.get("status")  # Pending or Completed
-            })
+    return appointments
 
-        return appointments
-
-    except Exception as e:
-        print("Error:", e)
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
+# --- UPDATE STATUS ---
 @router.put("/status")
-def update_appointment_status(payload: dict = Body(...)):
-    """
-    Expects JSON: {"id": "65ae...", "status": "Completed"}
-    """
+def update_status(payload: dict = Body(...)):
+
     appointment_id = payload.get("id")
-    new_status = payload.get("status")
+    status = payload.get("status")
 
-    if not appointment_id or not new_status:
-        raise HTTPException(status_code=400, detail="Missing id or status in request")
+    if not appointment_id or not status:
+        raise HTTPException(status_code=400, detail="Missing id or status")
 
+    result = appointments_collection.update_one(
+        {"_id": ObjectId(appointment_id)},
+        {"$set": {"status": status}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    return {"message": "Status updated"}
+
+@router.get("/doctor/{doctor_id}/ipd")
+def get_doctor_in_patients(doctor_id: str):
+    # Query for patients assigned to this doctor who are currently 'Admitted'
+    cursor = appointments_collection.find({
+        "doctor_id": doctor_id,
+        "is_ipd": True,
+        "status": "Admitted"
+    })
+    
+    patients = []
+    for doc in cursor.to_list(length=100):
+        patients.append({
+            "id": str(doc["_id"]),
+            "patient_name": doc.get("patient_name"),
+            "age": doc.get("age"),
+            "gender": doc.get("gender"),
+            "ward_no": doc.get("ward_no"),
+            "bed_no": doc.get("bed_no"),
+            "admission_date": doc.get("admission_date"),
+            "reason": doc.get("reason")
+        })
+    return patients
+
+@router.put("/{patient_id}/discharge")
+def discharge_patient(patient_id: str, data: DischargeUpdate):
     try:
-        # Convert the string ID to a MongoDB ObjectId
-        obj_id = ObjectId(appointment_id)
-        
-        # Perform the update
+        # Update the document: Set status to Discharged and save the date
         result = appointments_collection.update_one(
-            {"_id": obj_id},
-            {"$set": {"status": new_status}}
+            {"_id": ObjectId(patient_id)},
+            {
+                "$set": {
+                    "status": "Discharged",
+                    "discharge_date": data.discharge_date,
+                    "is_ipd": False # Optional: Move them out of IPD active list
+                }
+            }
         )
-
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Appointment not found")
-
-        return {"message": "Status updated successfully", "status": new_status}
-
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Patient record not found")
+            
+        return {"message": "Patient discharged successfully"}
+        
     except Exception as e:
-        print(f"Update Error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update status")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.put("/{patient_id}/finalize-discharge")
+def finalize_discharge(patient_id: str):
+    from datetime import datetime
+    
+    result = appointments_collection.update_one(
+        {"_id": ObjectId(patient_id)},
+        {
+            "$set": {
+                "status": "Discharged",
+                "is_ipd": False,
+                "admin_confirmed_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+            }
+        }
+    )
+    return {"message": "Patient records updated and bed cleared."}
